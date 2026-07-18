@@ -1,0 +1,61 @@
+{
+  "version": "1.0.0",
+  "default_action": "deny",
+  "transitions": {
+    "start": ["schema_linking", "format_answer"],
+    "schema_linking": ["schema_linking", "sql_generation", "format_answer"],
+    "sql_generation": ["sql_generation", "sql_review", "format_answer"],
+    "sql_review": ["schema_linking", "sql_generation", "sql_validation", "format_answer"],
+    "sql_validation": ["sql_generation", "sql_execution", "format_answer"],
+    "sql_execution": ["sql_generation", "format_answer"],
+    "format_answer": []
+  },
+  "agents": {
+    "schema_linking": {
+      "inputs": ["question", "iteration", "schema_status", "schema_refresh_count", "relevant_tables", "review_issues", "error", "error_history"],
+      "outputs": ["relevant_tables", "relevant_columns", "schema_status", "schema_reasoning", "schema_refresh_count", "terminal_reason", "error", "error_source", "error_history"],
+      "tools": ["get_db_overview", "list_tables", "get_table_columns", "llm"]
+    },
+    "sql_generation": {
+      "inputs": ["question", "as_of_date", "relevant_tables", "relevant_columns", "error", "error_history", "iteration", "sql_attempt_history"],
+      "outputs": ["sql", "sql_status", "sql_attempt_history", "review_status", "review_feedback", "review_issues", "sql_validated", "validation_status", "sql_result", "result_row_count", "result_truncated", "execution_status", "execution_error_code", "error", "error_source", "error_history"],
+      "tools": ["get_db_schema", "llm"]
+    },
+    "sql_review": {
+      "inputs": ["question", "as_of_date", "relevant_tables", "sql", "iteration", "error_history"],
+      "outputs": ["review_status", "review_feedback", "review_issues", "error", "error_source", "error_history"],
+      "tools": ["get_db_schema", "llm"]
+    },
+    "sql_validation": {
+      "inputs": ["sql", "iteration", "error_history"],
+      "outputs": ["sql_validated", "validation_status", "error", "error_source", "error_history"],
+      "tools": ["validate_sql"]
+    },
+    "sql_execution": {
+      "inputs": ["sql", "iteration", "error_history"],
+      "outputs": ["sql_result", "result_row_count", "result_truncated", "execution_status", "execution_error_code", "error", "error_source", "error_history"],
+      "tools": ["execute_sql_read_only"]
+    },
+    "format_answer": {
+      "inputs": ["question", "as_of_date", "input_guard_status", "input_risk_flags", "schema_status", "execution_status", "execution_error_code", "sql_result", "result_row_count", "result_truncated", "error", "error_history", "terminal_reason"],
+      "outputs": ["final_answer"],
+      "tools": ["llm"]
+    }
+  },
+  "limits": {
+    "schema_attempts": 2,
+    "sql_attempts": 3,
+    "workflow_iterations": 12,
+    "result_rows": 200,
+    "query_timeout_seconds": 5,
+    "database_concurrency": 4,
+    "database_queue_timeout_seconds": 10,
+    "agent_output_chars": 100000
+  },
+  "human_approval_required_for": [
+    "database_write",
+    "bulk_export",
+    "sensitive_columns",
+    "external_side_effect"
+  ]
+}

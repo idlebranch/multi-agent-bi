@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>BI Agent - 智能数据查询助手</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: #f5f5f7;
+            color: #1d1d1f;
+            padding: 20px;
+        }
+        .container { max-width: 1300px; margin: 0 auto; }
+        h1 { font-size: 24px; margin-bottom: 4px; }
+        .subtitle { color: #86868b; margin-bottom: 20px; font-size: 14px; }
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .version-switch {
+            display: inline-flex;
+            background: white;
+            border: 1px solid #d2d2d7;
+            border-radius: 10px;
+            padding: 3px;
+        }
+        .version-switch button {
+            background: transparent;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #1d1d1f;
+            font-family: inherit;
+        }
+        .version-switch button.active {
+            background: #0071e3;
+            color: white;
+            font-weight: 500;
+        }
+        .examples {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .example-btn {
+            background: white;
+            border: 1px solid #d2d2d7;
+            padding: 6px 12px;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .example-btn:hover { background: #f0f0f3; }
+        .example-btn.trap {
+            border-color: #ff9500;
+            color: #c2410c;
+        }
+        .input-area { display: flex; gap: 8px; margin-bottom: 20px; }
+        #question-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #d2d2d7;
+            border-radius: 12px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        #question-input:focus { outline: none; border-color: #0071e3; }
+        #ask-btn {
+            background: #0071e3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        #ask-btn:hover { background: #0077ed; }
+        #ask-btn:disabled { background: #c7c7cc; cursor: not-allowed; }
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .card h2 {
+            font-size: 13px;
+            color: #86868b;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+        .answer-box {
+            font-size: 15px;
+            line-height: 1.6;
+            min-height: 80px;
+            white-space: pre-wrap;
+        }
+        .sql-box {
+            background: #f5f5f7;
+            border-radius: 8px;
+            padding: 12px;
+            font-family: "SF Mono", Consolas, monospace;
+            font-size: 13px;
+            margin-bottom: 12px;
+            overflow-x: auto;
+            white-space: pre;
+        }
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .result-table th, .result-table td {
+            text-align: left;
+            padding: 8px 12px;
+            border-bottom: 1px solid #f0f0f3;
+        }
+        .result-table th {
+            background: #f5f5f7;
+            font-weight: 500;
+            color: #86868b;
+        }
+        .trace { font-size: 13px; max-height: 500px; overflow-y: auto; }
+        .trace-item {
+            border-left: 2px solid #0071e3;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            background: #f5f5f7;
+            border-radius: 0 8px 8px 0;
+        }
+        .trace-node { font-weight: 500; color: #0071e3; margin-bottom: 4px; }
+        .trace-detail {
+            color: #515154;
+            font-family: "SF Mono", monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .meta {
+            display: flex;
+            gap: 16px;
+            color: #86868b;
+            font-size: 12px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+        .loading { color: #86868b; font-style: italic; }
+        .routing-section {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #f0f0f3;
+        }
+        .routing-item {
+            padding: 6px 0;
+            font-size: 13px;
+        }
+        .routing-iter {
+            color: #86868b;
+            font-family: "SF Mono", monospace;
+            font-size: 12px;
+        }
+        .routing-decision {
+            color: #0071e3;
+            font-weight: 500;
+        }
+        .routing-reason {
+            color: #515154;
+            font-size: 12px;
+            margin-top: 2px;
+        }
+        .badge {
+            display: inline-block;
+            background: #0071e3;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            margin-left: 6px;
+        }
+        .badge.v1 { background: #86868b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>BI Agent</h1>
+        <p class="subtitle">基于 LangGraph 的只读数据查询 · 稳定路由与实验性恢复策略对比</p>
+
+        <div class="toolbar">
+            <div class="version-switch">
+                <button id="btn-v1" class="active" onclick="setVersion('v1')">v1 (稳定版)</button>
+                <button id="btn-v2" onclick="setVersion('v2')">v2 (实验恢复)</button>
+            </div>
+            <span style="color: #86868b; font-size: 12px;">
+                切换版本对比死循环 vs 智能放弃
+            </span>
+        </div>
+
+        <div class="examples">
+            <button class="example-btn" onclick="setExample('各地区有多少客户')">各地区客户数</button>
+            <button class="example-btn" onclick="setExample('销量前 5 的产品有哪些')">销量 Top5</button>
+            <button class="example-btn" onclick="setExample('华东区一共有多少订单')">华东订单数</button>
+            <button class="example-btn" onclick="setExample('每个类别的产品平均价格')">类别均价</button>
+            <button class="example-btn trap" onclick="setExample('哪个员工业绩最好')">⚠ 陷阱:员工业绩(数据库没有)</button>
+        </div>
+
+        <div class="input-area">
+            <input type="text" id="question-input" placeholder="问点什么... 比如:各地区客户多少" />
+            <button id="ask-btn" onclick="askAgent()">问 Agent</button>
+        </div>
+
+        <div class="layout">
+            <div>
+                <div class="card">
+                    <h2>最终回复 <span class="badge v1" id="version-badge">v1</span></h2>
+                    <div class="answer-box" id="answer">等待提问...</div>
+                    <div class="meta" id="meta"></div>
+                </div>
+
+                <div class="card" style="margin-top: 20px;">
+                    <h2>生成的 SQL</h2>
+                    <div class="sql-box" id="sql">-</div>
+
+                    <h2 style="margin-top: 16px;">查询结果</h2>
+                    <div id="result-area">-</div>
+                </div>
+
+                <div class="card" id="routing-card" style="margin-top: 20px; display: none;">
+                    <h2>Supervisor 路由历史</h2>
+                    <div id="routing-list"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Agent 推理轨迹</h2>
+                <div class="trace" id="trace">尚未运行</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentVersion = 'v1';
+
+        function setVersion(v) {
+            currentVersion = v;
+            document.getElementById('btn-v1').classList.toggle('active', v === 'v1');
+            document.getElementById('btn-v2').classList.toggle('active', v === 'v2');
+            const badge = document.getElementById('version-badge');
+            badge.textContent = v;
+            badge.className = 'badge ' + (v === 'v1' ? 'v1' : '');
+        }
+
+        function setExample(text) {
+            document.getElementById('question-input').value = text;
+        }
+
+        async function askAgent() {
+            const question = document.getElementById('question-input').value.trim();
+            if (!question) return;
+
+            const askBtn = document.getElementById('ask-btn');
+            askBtn.disabled = true;
+            askBtn.textContent = '思考中...';
+
+            document.getElementById('answer').innerHTML = '<span class="loading">Agent 正在推理...</span>';
+            document.getElementById('sql').textContent = '-';
+            document.getElementById('result-area').textContent = '-';
+            document.getElementById('trace').innerHTML = '<span class="loading">运行中...</span>';
+            document.getElementById('meta').textContent = '';
+            document.getElementById('routing-card').style.display = 'none';
+
+            try {
+                const res = await fetch('/ask', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({question: question, version: currentVersion})
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    const detail = Array.isArray(data.detail)
+                        ? JSON.stringify(data.detail)
+                        : (data.detail || '请求失败');
+                    throw new Error(detail);
+                }
+
+                document.getElementById('answer').textContent = data.final_answer;
+
+                document.getElementById('meta').innerHTML =
+                    `<span>版本: ${escapeHtml(data.version)}</span>` +
+                    `<span>迭代次数: ${escapeHtml(data.iteration)}</span>` +
+                    `<span>相关表: ${escapeHtml(data.relevant_tables.join(', ') || '无')}</span>` +
+                    `<span>Reviewer: ${escapeHtml(data.review_status)}</span>` +
+                    `<span>执行状态: ${escapeHtml(data.execution_status)}</span>` +
+                    `<span>输入防护: ${escapeHtml(data.input_guard_status)}</span>` +
+                    `<span>结果行数: ${escapeHtml(data.result_row_count)}${data.result_truncated ? '+' : ''}</span>`;
+
+                document.getElementById('sql').textContent = data.sql || '(无)';
+                renderResult(data.sql_result);
+                renderTrace(data.trace);
+                renderRouting(data.routing_history, data.handoff_history, data.policy_decisions);
+
+            } catch (e) {
+                document.getElementById('answer').textContent = '出错: ' + e.message;
+            } finally {
+                askBtn.disabled = false;
+                askBtn.textContent = '问 Agent';
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
+        function renderResult(rows) {
+            const area = document.getElementById('result-area');
+            if (!rows || rows.length === 0) {
+                area.textContent = '(无数据)';
+                return;
+            }
+            const cols = Object.keys(rows[0]);
+            let html = '<table class="result-table"><thead><tr>';
+            cols.forEach(c => html += `<th>${escapeHtml(c)}</th>`);
+            html += '</tr></thead><tbody>';
+            rows.slice(0, 20).forEach(r => {
+                html += '<tr>';
+                cols.forEach(c => html += `<td>${escapeHtml(r[c])}</td>`);
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            if (rows.length > 20) {
+                html += `<div class="meta">仅显示前 20 条,共 ${rows.length} 条</div>`;
+            }
+            area.innerHTML = html;
+        }
+
+        function renderTrace(trace) {
+            const area = document.getElementById('trace');
+            if (!trace || trace.length === 0) {
+                area.textContent = '(无)';
+                return;
+            }
+            let html = '';
+            trace.forEach((item, i) => {
+                html += '<div class="trace-item">';
+                html += `<div class="trace-node">[${i+1}] ${escapeHtml(item.node)}</div>`;
+
+                const detail = Object.entries(item)
+                    .filter(([k, v]) => k !== 'node' && k !== 'routing_history' &&
+                                       v !== '' && v !== null &&
+                                       !(Array.isArray(v) && v.length === 0) &&
+                                       !(typeof v === 'object' && Object.keys(v).length === 0))
+                    .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
+                    .join('\n');
+
+                if (detail) html += `<div class="trace-detail">${escapeHtml(detail)}</div>`;
+                html += '</div>';
+            });
+            area.innerHTML = html;
+        }
+
+        function renderRouting(history, handoffs = [], policyDecisions = []) {
+            const card = document.getElementById('routing-card');
+            if (!history || history.length === 0) {
+                card.style.display = 'none';
+                return;
+            }
+            card.style.display = 'block';
+            let html = '';
+            const transitions = policyDecisions.filter(p =>
+                String(p.action || '').startsWith('transition:')
+            );
+            history.forEach((h, index) => {
+                const handoff = handoffs[index] || {};
+                const decision = transitions[index] || {};
+                html += '<div class="routing-item">';
+                html += `<span class="routing-iter">iter ${escapeHtml(h.iteration)}</span> → `;
+                html += `<span class="routing-decision">${escapeHtml(h.decided)}</span>`;
+                html += `<div class="routing-reason">理由: ${escapeHtml(h.reason)}</div>`;
+                if (handoff.from_agent) {
+                    html += `<div class="routing-reason">交接: ${escapeHtml(handoff.from_agent)} → ${escapeHtml(handoff.to_agent)}</div>`;
+                }
+                if (typeof decision.allowed === 'boolean') {
+                    html += `<div class="routing-reason">策略: ${decision.allowed ? '允许' : '拒绝'} · v${escapeHtml(decision.policy_version)}</div>`;
+                }
+                html += '</div>';
+            });
+            document.getElementById('routing-list').innerHTML = html;
+        }
+
+        document.getElementById('question-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') askAgent();
+        });
+    </script>
+</body>
+</html>
