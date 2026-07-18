@@ -1,0 +1,76 @@
+{
+  "dataset": "Olist Brazilian E-Commerce",
+  "tables": {
+    "customers": {
+      "description": "订单级客户记录；跨订单识别同一消费者必须使用 customer_unique_id，而不是 customer_id",
+      "columns": {
+        "customer_id": "每笔订单使用的客户键，可连接 orders.customer_id",
+        "customer_unique_id": "跨订单稳定的消费者标识，用于复购分析",
+        "state": "客户所在巴西州的两位缩写"
+      }
+    },
+    "orders": {
+      "description": "订单主表，一行一个订单；包含状态及购买、批准、发货、签收、预计签收时间",
+      "columns": {
+        "purchase_timestamp": "订单购买时间，文本格式 YYYY-MM-DD HH:MM:SS",
+        "status": "订单状态；GMV 通常限定为 delivered",
+        "delivered_customer_timestamp": "实际送达客户时间",
+        "estimated_delivery_timestamp": "承诺的预计送达时间"
+      }
+    },
+    "order_items": {
+      "description": "订单商品明细，一行一个订单行；商品销售额在 price，运费在 freight_value",
+      "columns": {
+        "price": "商品成交价，不含运费",
+        "freight_value": "该订单行的运费"
+      }
+    },
+    "payments": {
+      "description": "支付明细；一个订单可有多次或混合支付，payment_value 通常包含商品与运费总额"
+    },
+    "reviews": {
+      "description": "订单评价，review_score 为 1 到 5；少数订单可能存在多条评价"
+    },
+    "products": {
+      "description": "商品主数据；category_name 是葡萄牙语，可连接 category_translations"
+    },
+    "sellers": {
+      "description": "卖家主数据及所在城市、州"
+    },
+    "geolocation": {
+      "description": "按邮编前缀聚合后的地理坐标；已消除原始重复行，避免连接时放大指标"
+    },
+    "category_translations": {
+      "description": "商品类别葡萄牙语到英语的映射"
+    },
+    "order_financials": {
+        "description": "订单粒度的物化财务语义表；预先分别聚合商品和支付，避免多对多连接造成金额重复"
+    },
+    "order_delivery_metrics": {
+        "description": "已签收订单粒度的物化时效明细表，已经固定 orders.status = delivered；支持 customer_state 和时间维度，delivered_on_time 为 1 表示按时或提前送达，NULL 表示配送结果未知"
+    },
+    "product_sales": {
+        "description": "订单商品粒度的物化销售语义表；包含 purchase_timestamp、customer_state、seller_state；category_name 已翻译为英文，严禁再连接 category_translations.category_name"
+    },
+    "category_sales_summary": {
+        "description": "按英文商品类别汇总的物化已签收销售表；delivered_gmv 已限定 delivered 且不含运费；order_count 是包含该类别的去重已签收订单数；不含时间列，只适用于全时段类别指标"
+    },
+    "delivery_kpis": {
+        "description": "已签收配送 KPI 单行物化表；on_time_delivery_pct 已经是 0 到 100 的总体百分比，不支持州或时间拆分"
+    },
+    "payment_type_summary": {
+        "description": "按支付方式汇总全部支付记录的物化表；payment_value 不限定订单状态，除非用户明确要求已签收支付金额"
+    },
+    "customer_order_summary": {
+        "description": "按 customer_unique_id 汇总全部订单的物化表；可用于复购、客户累计 GMV 和客户分位数；复购定义为 order_count >= 2"
+    }
+  },
+  "metrics": {
+    "delivered_gmv": "仅统计 orders.status = 'delivered' 的 SUM(order_items.price)，不含运费",
+    "payment_value": "全部 payments 的 SUM(payment_value)，默认不限定订单状态；按支付方式分析优先使用 payment_type_summary",
+    "freight_value": "SUM(order_items.freight_value)",
+    "average_order_value": "delivered_gmv / COUNT(DISTINCT delivered order_id)",
+    "on_time_delivery_rate": "百分比口径，直接使用 delivery_kpis.on_time_delivery_pct；等价于 AVG(order_delivery_metrics.delivered_on_time) * 100，忽略 NULL",
+    "repeat_customer": "全部订单口径，统计 customer_order_summary.order_count >= 2 的消费者；除非用户明确要求，否则不加状态或日期过滤"
+  }
+}

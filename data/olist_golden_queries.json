@@ -1,0 +1,58 @@
+[
+  {
+    "name": "orders_by_status",
+    "question": "各订单状态有多少订单？",
+    "sql": "SELECT status, COUNT(*) AS order_count FROM orders GROUP BY status ORDER BY order_count DESC, status",
+    "min_rows": 8,
+    "expected_first_row": {"status": "delivered", "order_count": 96478}
+  },
+  {
+    "name": "monthly_delivered_gmv",
+    "question": "每月已签收商品 GMV 是多少？",
+    "sql": "SELECT substr(o.purchase_timestamp, 1, 7) AS month, ROUND(SUM(oi.price), 2) AS delivered_gmv FROM orders o JOIN order_items oi ON oi.order_id = o.order_id WHERE o.status = 'delivered' GROUP BY month ORDER BY month",
+    "min_rows": 20,
+    "expected_first_row": {"month": "2016-09", "delivered_gmv": 134.97}
+  },
+  {
+    "name": "top_categories_by_delivered_gmv",
+    "question": "已签收 GMV 最高的五个商品类别是什么？",
+    "sql": "SELECT category_name, ROUND(SUM(price), 2) AS delivered_gmv FROM product_sales WHERE order_status = 'delivered' GROUP BY category_name ORDER BY delivered_gmv DESC, category_name LIMIT 5",
+    "min_rows": 5,
+    "expected_first_row": {"category_name": "health_beauty", "delivered_gmv": 1233131.72}
+  },
+  {
+    "name": "average_order_value",
+    "question": "已签收订单的平均客单价是多少？",
+    "sql": "SELECT ROUND(SUM(item_value) / COUNT(*), 2) AS average_order_value FROM order_financials WHERE status = 'delivered'",
+    "min_rows": 1,
+    "expected_first_row": {"average_order_value": 137.04}
+  },
+  {
+    "name": "on_time_delivery_rate",
+    "question": "已签收订单的按时送达率是多少？",
+    "sql": "SELECT ROUND(AVG(delivered_on_time) * 100, 4) AS on_time_delivery_pct FROM order_delivery_metrics",
+    "min_rows": 1,
+    "expected_first_row": {"on_time_delivery_pct": 91.8876}
+  },
+  {
+    "name": "payment_value_by_type",
+    "question": "各支付方式的支付金额是多少？",
+    "sql": "SELECT payment_type, ROUND(SUM(payment_value), 2) AS payment_value FROM payments GROUP BY payment_type ORDER BY payment_value DESC, payment_type",
+    "min_rows": 5,
+    "expected_first_row": {"payment_type": "credit_card", "payment_value": 12542084.19}
+  },
+  {
+    "name": "repeat_customers",
+    "question": "下过两次及以上订单的消费者有多少？",
+    "sql": "SELECT COUNT(*) AS repeat_customers FROM (SELECT c.customer_unique_id FROM orders o JOIN customers c ON c.customer_id = o.customer_id GROUP BY c.customer_unique_id HAVING COUNT(DISTINCT o.order_id) > 1)",
+    "min_rows": 1,
+    "expected_first_row": {"repeat_customers": 2997}
+  },
+  {
+    "name": "top_seller_states",
+    "question": "已签收 GMV 最高的五个卖家州是什么？",
+    "sql": "SELECT seller_state, ROUND(SUM(price), 2) AS delivered_gmv FROM product_sales WHERE order_status = 'delivered' GROUP BY seller_state ORDER BY delivered_gmv DESC, seller_state LIMIT 5",
+    "min_rows": 5,
+    "expected_first_row": {"seller_state": "SP", "delivered_gmv": 8509511.46}
+  }
+]

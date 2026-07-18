@@ -1,0 +1,36 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.python-version
+*.egg-info/
+
+# 环境变量(关键!)
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# uv
+.uv-cache/
+
+# 数据库文件(模拟数据,别人 clone 后自己跑 db_init.py 生成)
+data/*.sqlite
+data/*.sqlite-*
+data/raw/
+data/active_dataset.json
+data/*.building
+
+# 日志/临时文件
+*.log
+*.tmp
+reports/live_batch_*.json
+reports/performance_*.json
