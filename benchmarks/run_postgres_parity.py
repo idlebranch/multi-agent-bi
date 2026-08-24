@@ -74,6 +74,28 @@ def load_postgres_gold(
     }
 
 
+def _apply_comparison_overrides(
+    case: dict[str, Any], rows: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Apply gold-side comparison shaping to the PostgreSQL gold result too."""
+    if case.get("comparison_gold_transform") == "split_year_quarter":
+        rows = [
+            {
+                "year": str(row["quarter"]).split("-", 1)[0],
+                "quarter": str(row["quarter"]).split("-", 1)[1],
+                "order_count": row["order_count"],
+            }
+            for row in rows
+        ]
+    comparison_columns = case.get("comparison_gold_columns")
+    if comparison_columns:
+        rows = [
+            {column: row[column] for column in comparison_columns}
+            for row in rows
+        ]
+    return rows
+
+
 def _difference_type(case: dict[str, Any], comparison: dict[str, Any]) -> str:
     reason = str(comparison.get("reason", ""))
     sql = str(case.get("gold_sql", "")).casefold()
@@ -147,10 +169,13 @@ def run_parity(
             }
             difference_type = "SQL translation"
         else:
+            postgres_comparison_rows = _apply_comparison_overrides(
+                case, list(postgres_result.get("data") or [])
+            )
             comparison = compare_case_results(
                 case,
                 list(sqlite_result.get("data") or []),
-                list(postgres_result.get("data") or []),
+                postgres_comparison_rows,
             )
             difference_type = (
                 "none" if comparison["passed"] else _difference_type(case, comparison)

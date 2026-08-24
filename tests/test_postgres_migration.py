@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from benchmarks.run_postgres_parity import load_postgres_gold
+from benchmarks.run_postgres_parity import _apply_comparison_overrides, load_postgres_gold
 from benchmarks.schema import apply_evaluation_overrides, load_business_cases
 from scripts.load_olist_postgres import BASE_TABLES, SEMANTIC_TABLES, TABLE_COLUMNS
 from src.tools import postgres_db_tools
@@ -46,6 +46,22 @@ class PostgresMigrationContractTests(unittest.TestCase):
         payload = json.loads(POSTGRES_GOLD.read_text(encoding="utf-8"))
         self.assertEqual(len(payload["portable_case_ids"]), 68)
         self.assertEqual(len(payload["queries"]), 17)
+
+    def test_postgres_parity_applies_gold_comparison_overrides_to_both_sides(self) -> None:
+        quarter_rows = [{"quarter": "2018-Q1", "order_count": 10}]
+        self.assertEqual(
+            _apply_comparison_overrides(
+                {"comparison_gold_transform": "split_year_quarter"}, quarter_rows
+            ),
+            [{"year": "2018", "quarter": "Q1", "order_count": 10}],
+        )
+        projected_rows = [{"category_name": "books", "order_count": 2, "aov": 10.0}]
+        self.assertEqual(
+            _apply_comparison_overrides(
+                {"comparison_gold_columns": ["category_name", "aov"]}, projected_rows
+            ),
+            [{"category_name": "books", "aov": 10.0}],
+        )
 
     def test_application_policy_rejects_write_and_admin_sql(self) -> None:
         dangerous = (
@@ -95,6 +111,7 @@ class PostgresIntegrationTests(unittest.TestCase):
         self.assertTrue(set((*BASE_TABLES, *SEMANTIC_TABLES)).issubset(tables))
         overview = postgres_db_tools.get_db_overview(self.database_url)
         self.assertIn("PostgreSQL catalog", overview)
+        self.assertIn("order_id text PK", overview)
         self.assertIn("order_id -> orders.order_id", overview)
         with patch.dict(os.environ, {"BI_DATABASE_URL": self.database_url}):
             health = postgres_db_tools.get_database_health_summary(force_refresh=True)

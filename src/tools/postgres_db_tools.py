@@ -381,13 +381,15 @@ def _column_rows(conn: Any, table: str) -> list[dict[str, Any]]:
     return list(
         conn.execute(
             "SELECT c.column_name, c.data_type, c.is_nullable, EXISTS ("
-            "SELECT 1 FROM information_schema.table_constraints tc "
-            "JOIN information_schema.key_column_usage kcu "
-            "ON tc.constraint_name = kcu.constraint_name "
-            "AND tc.constraint_schema = kcu.constraint_schema "
-            "WHERE tc.table_schema = c.table_schema AND tc.table_name = c.table_name "
-            "AND tc.constraint_type = 'PRIMARY KEY' "
-            "AND kcu.column_name = c.column_name) AS is_primary_key "
+            "SELECT 1 FROM pg_catalog.pg_constraint pc "
+            "JOIN pg_catalog.pg_class relation ON relation.oid = pc.conrelid "
+            "JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace "
+            "JOIN LATERAL unnest(pc.conkey) AS key_column(attnum) ON TRUE "
+            "JOIN pg_catalog.pg_attribute attribute "
+            "ON attribute.attrelid = pc.conrelid AND attribute.attnum = key_column.attnum "
+            "WHERE pc.contype = 'p' AND namespace.nspname = c.table_schema "
+            "AND relation.relname = c.table_name "
+            "AND attribute.attname = c.column_name) AS is_primary_key "
             "FROM information_schema.columns c "
             "WHERE c.table_schema = current_schema() AND c.table_name = %s "
             "ORDER BY c.ordinal_position",
@@ -399,18 +401,25 @@ def _column_rows(conn: Any, table: str) -> list[dict[str, Any]]:
 def _foreign_key_rows(conn: Any, table: str) -> list[dict[str, Any]]:
     return list(
         conn.execute(
-            "SELECT kcu.column_name, ccu.table_name AS foreign_table_name, "
-            "ccu.column_name AS foreign_column_name "
-            "FROM information_schema.table_constraints tc "
-            "JOIN information_schema.key_column_usage kcu "
-            "ON tc.constraint_name = kcu.constraint_name "
-            "AND tc.constraint_schema = kcu.constraint_schema "
-            "JOIN information_schema.constraint_column_usage ccu "
-            "ON ccu.constraint_name = tc.constraint_name "
-            "AND ccu.constraint_schema = tc.constraint_schema "
-            "WHERE tc.constraint_type = 'FOREIGN KEY' "
-            "AND tc.table_schema = current_schema() AND tc.table_name = %s "
-            "ORDER BY kcu.ordinal_position",
+            "SELECT local_attribute.attname AS column_name, "
+            "foreign_relation.relname AS foreign_table_name, "
+            "foreign_attribute.attname AS foreign_column_name "
+            "FROM pg_catalog.pg_constraint pc "
+            "JOIN pg_catalog.pg_class local_relation ON local_relation.oid = pc.conrelid "
+            "JOIN pg_catalog.pg_namespace namespace "
+            "ON namespace.oid = local_relation.relnamespace "
+            "JOIN pg_catalog.pg_class foreign_relation "
+            "ON foreign_relation.oid = pc.confrelid "
+            "JOIN LATERAL unnest(pc.conkey, pc.confkey) WITH ORDINALITY "
+            "AS key_columns(local_attnum, foreign_attnum, position) ON TRUE "
+            "JOIN pg_catalog.pg_attribute local_attribute "
+            "ON local_attribute.attrelid = pc.conrelid "
+            "AND local_attribute.attnum = key_columns.local_attnum "
+            "JOIN pg_catalog.pg_attribute foreign_attribute "
+            "ON foreign_attribute.attrelid = pc.confrelid "
+            "AND foreign_attribute.attnum = key_columns.foreign_attnum "
+            "WHERE pc.contype = 'f' AND namespace.nspname = current_schema() "
+            "AND local_relation.relname = %s ORDER BY key_columns.position",
             (table,),
         ).fetchall()
     )
