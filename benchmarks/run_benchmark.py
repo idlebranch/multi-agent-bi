@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
 import os
 import platform
-import sqlite3
 import statistics
 import subprocess
 import sys
@@ -36,11 +34,17 @@ from benchmarks.schema import (  # noqa: E402
     load_business_cases,
     load_safety_cases,
 )
+from benchmarks.sqlite_reference import (  # noqa: E402
+    execute_sqlite,
+    get_sqlite_reference_path,
+    sqlite_database_fingerprint,
+    validate_sqlite,
+)
 from src.config import DEEPSEEK_BASE_URL, DEEPSEEK_MODEL, get_data_as_of_date  # noqa: E402
 from src.graph import app as production_agent  # noqa: E402
 from src.guardrails import sanitize_public_value  # noqa: E402
 from src.state import create_initial_state  # noqa: E402
-from src.tools.db_tools import execute_sql, get_db_path, validate_sql  # noqa: E402
+from src.tools.db_tools import execute_sql  # noqa: E402
 from src.workflow import run_graph_once  # noqa: E402
 
 
@@ -67,40 +71,8 @@ KEY_TABLES = (
 )
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def database_fingerprint(path: Path) -> dict[str, Any]:
-    uri = f"{path.as_uri()}?mode=ro"
-    with sqlite3.connect(uri, uri=True) as conn:
-        conn.execute("PRAGMA query_only = ON")
-        integrity = str(conn.execute("PRAGMA integrity_check").fetchone()[0])
-        foreign_key_violations = sum(1 for _ in conn.execute("PRAGMA foreign_key_check"))
-        present = {
-            str(row[0])
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-            )
-        }
-        row_counts = {
-            table: int(conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0])
-            for table in KEY_TABLES
-            if table in present
-        }
-    return {
-        "path": str(path),
-        "bytes": path.stat().st_size,
-        "sha256": _sha256(path),
-        "integrity_check": integrity,
-        "foreign_key_violations": foreign_key_violations,
-        "row_counts": row_counts,
-        "read_only_connection": True,
-    }
+    return sqlite_database_fingerprint(path, tables=KEY_TABLES)
 
 
 def _git_sha() -> str:
@@ -115,7 +87,7 @@ def _git_sha() -> str:
 
 
 def _execute(sql: str, db_path: Path) -> dict[str, Any]:
-    validation = validate_sql(sql, db_path)
+    validation = validate_sqlite(sql, db_path)
     if not validation["valid"]:
         return {
             "success": False,
@@ -125,7 +97,7 @@ def _execute(sql: str, db_path: Path) -> dict[str, Any]:
             "error": validation["error"],
             "error_code": "invalid_sql",
         }
-    return execute_sql(sql, db_path, max_rows=10_000, timeout_seconds=30)
+    return execute_sqlite(sql, db_path, max_rows=10_000, timeout_seconds=30)
 
 
 def _stage_counts(trace: list[dict[str, Any]]) -> tuple[int, int, int]:
@@ -217,7 +189,9 @@ def run_business_case(case: dict[str, Any], db_path: Path) -> dict[str, Any]:
 
     if case["expected_behavior"] == "query":
         if sql_generated and sql_review_passed:
-            agent_execution = _execute(str(state["sql"]), db_path)
+            agent_execution = execute_sql(
+                str(state["sql"]), max_rows=10_000, timeout_seconds=30
+            )
             if agent_execution["success"]:
                 comparison = compare_case_results(
                     case, gold_rows, list(agent_execution.get("data") or [])
@@ -643,7 +617,7 @@ def main() -> int:
     safety_cases = load_safety_cases(SAFETY_CASES)
     business_cases = _select(business_cases, args, safety=False) if args.suite in {"all", "business"} else []
     safety_cases = _select(safety_cases, args, safety=True) if args.suite in {"all", "safety"} else []
-    db_path = get_db_path()
+    db_path = get_sqlite_reference_path()
     database_before = database_fingerprint(db_path)
     started = time.perf_counter()
 

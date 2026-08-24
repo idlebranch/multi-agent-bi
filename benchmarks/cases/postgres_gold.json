@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "dialect": "postgresql",
+  "description": "Portable gold SQL is reused verbatim only when explicitly listed; dialect-specific SQL is independently frozen in queries.",
+  "portable_case_ids": [
+    "B001", "B002", "B003", "B004", "B005", "B006", "B007", "B008",
+    "B009", "B010", "B011", "B012", "B013", "B014", "B015", "B016",
+    "B017", "B018", "B019", "B020", "B021", "B022", "B023", "B024",
+    "B025", "B026", "B027", "B028", "B029", "B030", "B031", "B032",
+    "B033", "B034", "B035", "B037", "B048", "B049", "B050", "B054",
+    "B055", "B056", "B057", "B058", "B059", "B060", "B061", "B062",
+    "B063", "B064", "B065", "B066", "B067", "B068", "B069", "B070",
+    "B071", "B072", "B073", "B074", "B076", "B077", "B078", "B079",
+    "B081", "B082", "B087", "B088"
+  ],
+  "queries": {
+    "B036": "SELECT to_char(o.purchase_timestamp,'YYYY-MM') AS month, COUNT(*) AS review_count, ROUND(AVG(r.review_score),4) AS average_review_score FROM orders o JOIN reviews r ON r.order_id = o.order_id WHERE to_char(o.purchase_timestamp,'YYYY') = '2018' GROUP BY month HAVING COUNT(*) >= 1000 ORDER BY month",
+    "B038": "SELECT to_char(purchase_timestamp,'YYYY-MM') AS month, ROUND(SUM(price),2) AS delivered_gmv FROM product_sales WHERE order_status='delivered' GROUP BY month ORDER BY month",
+    "B039": "SELECT to_char(purchase_timestamp,'YYYY-MM') AS month, COUNT(*) AS order_count FROM orders GROUP BY month ORDER BY month",
+    "B040": "SELECT to_char(purchase_timestamp,'YYYY-MM') AS month, COUNT(*) AS order_count, SUM(CASE WHEN status='canceled' THEN 1 ELSE 0 END) AS canceled_orders, ROUND(SUM(CASE WHEN status='canceled' THEN 1 ELSE 0 END)*100.0/COUNT(*),4) AS cancellation_pct FROM orders GROUP BY month HAVING COUNT(*)>=100 ORDER BY cancellation_pct DESC, month LIMIT 5",
+    "B041": "SELECT to_char(purchase_timestamp,'YYYY') AS year, ROUND(SUM(price),2) AS delivered_gmv FROM product_sales WHERE order_status='delivered' GROUP BY year ORDER BY year",
+    "B042": "SELECT to_char(purchase_timestamp,'YYYY')||'-Q'||EXTRACT(QUARTER FROM purchase_timestamp)::INTEGER::TEXT AS quarter, COUNT(*) AS order_count FROM orders GROUP BY quarter ORDER BY quarter",
+    "B043": "SELECT to_char(o.purchase_timestamp,'YYYY-MM') AS month, ROUND(SUM(p.payment_value),2) AS payment_value FROM orders o JOIN payments p ON p.order_id=o.order_id GROUP BY month ORDER BY month",
+    "B044": "SELECT to_char(purchase_timestamp,'YYYY-MM') AS month, ROUND(SUM(freight_value),2) AS freight_value FROM product_sales WHERE order_status='delivered' GROUP BY month ORDER BY month",
+    "B045": "SELECT to_char(purchase_timestamp,'YYYY-MM') AS month, COUNT(delivered_on_time) AS measured_orders, ROUND(AVG(delivered_on_time)*100,2) AS on_time_delivery_pct FROM order_delivery_metrics GROUP BY month ORDER BY month",
+    "B046": "SELECT to_char(purchase_timestamp,'YYYY-MM') AS month, ROUND(SUM(item_value)/COUNT(*),2) AS average_order_value FROM order_financials WHERE status='delivered' AND to_char(purchase_timestamp,'YYYY')='2018' GROUP BY month ORDER BY month",
+    "B047": "WITH category_year AS (SELECT to_char(purchase_timestamp,'YYYY') AS year, category_name, SUM(price) AS delivered_gmv FROM product_sales WHERE order_status='delivered' AND to_char(purchase_timestamp,'YYYY') IN ('2017','2018') GROUP BY year,category_name), ranked AS (SELECT year,category_name,delivered_gmv,ROW_NUMBER() OVER(PARTITION BY year ORDER BY delivered_gmv DESC,category_name) AS rn FROM category_year) SELECT year,category_name,ROUND(delivered_gmv,2) AS delivered_gmv FROM ranked WHERE rn=1 ORDER BY year",
+    "B051": "SELECT to_char(purchase_timestamp,'YYYY-MM') AS month, ROUND(SUM(price),2) AS delivered_gmv FROM product_sales WHERE order_status='delivered' AND purchase_timestamp>='2018-08-01' AND purchase_timestamp<'2018-11-01' GROUP BY month ORDER BY month",
+    "B052": "SELECT to_char(purchase_timestamp,'YYYY-MM') AS month, COUNT(*) AS order_count FROM orders WHERE purchase_timestamp>='2017-10-01' AND purchase_timestamp<'2018-01-01' GROUP BY month ORDER BY month",
+    "B053": "SELECT to_char(purchase_timestamp,'YYYY-MM') AS month, ROUND(SUM(CASE WHEN status='canceled' THEN 1 ELSE 0 END)*100.0/COUNT(*),4) AS cancellation_pct FROM orders WHERE purchase_timestamp>='2018-01-01' AND purchase_timestamp<'2018-07-01' GROUP BY month ORDER BY month",
+    "B075": "WITH monthly AS (SELECT to_char(purchase_timestamp,'YYYY-MM') AS month,SUM(price) AS delivered_gmv FROM product_sales WHERE order_status='delivered' GROUP BY month), compared AS (SELECT month,delivered_gmv,LAG(delivered_gmv) OVER(ORDER BY month) AS previous_gmv FROM monthly) SELECT month,ROUND(delivered_gmv,2) AS delivered_gmv,ROUND((delivered_gmv-previous_gmv)*100.0/previous_gmv,2) AS mom_growth_pct FROM compared WHERE month='2017-02'",
+    "B080": "SELECT COUNT(*) AS products_in_both_years FROM (SELECT product_id FROM product_sales WHERE order_status='delivered' AND to_char(purchase_timestamp,'YYYY') IN ('2017','2018') GROUP BY product_id HAVING COUNT(DISTINCT to_char(purchase_timestamp,'YYYY'))=2) AS products_by_year",
+    "B086": "SELECT to_char(purchase_timestamp,'YYYY-MM') AS month,COUNT(*) AS order_count FROM orders WHERE purchase_timestamp>='2030-01-01' AND purchase_timestamp<'2031-01-01' GROUP BY month ORDER BY month"
+  }
+}
