@@ -371,7 +371,7 @@ def _window_is_filtered_at_same_level(sql: str) -> bool:
             if depths[where_match.start()] != depths[lag_position]:
                 continue
             predicate = value[where_match.end() : where_match.end() + 240]
-            if re.search(r"\b(?:month|year|date)\b|strftime\s*\(", predicate):
+            if re.search(r"\b(?:month|year|date)\b|to_char\s*\(", predicate):
                 return True
     return False
 

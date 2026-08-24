@@ -1,6 +1,6 @@
 # Multi-Agent BI
 
-这是一个面向业务数据问答的只读 Multi-Agent 系统。项目使用 LangGraph 编排 Schema Linking、SQL Writer、SQL Reviewer、Safety Validator、只读 Executor 与 Answer Formatter；FastAPI 提供接口，SQLite 保存 Olist Brazilian E-Commerce 公开数据。
+这是一个面向业务数据问答的只读 Multi-Agent 系统。项目使用 LangGraph 编排 Schema Linking、SQL Writer、SQL Reviewer、Safety Validator、只读 Executor 与 Answer Formatter；FastAPI 提供接口，PostgreSQL 17 保存 Olist Brazilian E-Commerce 公开数据。
 
 网页只提供一个 `Production` Agent。原实验恢复图保留为 legacy 代码，不再由网页、API、命令行或启动器公开调用。Production 工作流包含有限 SQL 修复：Reviewer、Safety 或 Executor 返回可修复问题时会重新进入 SQL Writer，最多修复 2 次，之后安全终止。
 
@@ -20,17 +20,17 @@
 
 系统保留以下安全措施：
 
-- SQLite URI 只读连接和 `PRAGMA query_only=ON`；
-- 单条 `SELECT`/`WITH` 查询白名单，拒绝写操作、危险 PRAGMA、ATTACH 和多语句 SQL；
-- Reviewer 业务口径检查、SQLite `EXPLAIN`、执行超时、最大返回行数与并发背压；
+- Production Agent 只使用数据库角色 `agent_readonly`，数据库默认事务只读；
+- 单条 `SELECT`/`WITH` 查询白名单，拒绝写操作、管理命令和多语句 SQL；
+- Reviewer 业务口径检查、PostgreSQL `EXPLAIN`、statement timeout、最大返回行数与并发背压；
 - Agent 状态字段、工具、路由和迭代次数由 `policies/agent_policy.json` 限制；
 - 数据库文本按不可信输入处理，接口和网页不返回密钥、堆栈或原始供应商异常。
 
 ## 数据库
 
-数据源为 [Olist Brazilian E-Commerce Public Dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)，许可为 CC BY-NC-SA 4.0。本机数据库由 `scripts/load_olist.py` 构建，包含原始业务表、索引和 7 个 BI 语义表。`data/olist_semantic_model.json` 定义 GMV、平均客单价、按时送达率与复购等受控指标。
+数据源为 [Olist Brazilian E-Commerce Public Dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)，许可为 CC BY-NC-SA 4.0。PostgreSQL warehouse 由 `scripts/load_olist_postgres.py` 构建，包含 9 张基础表、7 张物化语义表和生产索引。`data/olist_semantic_model.json` 定义 GMV、平均客单价、按时送达率与复购等受控指标。
 
-网页右上角的“数据库状态”会读取 `/health` 的实际诊断结果，展示文件大小、只读状态、完整性、外键异常、时间范围及主要表行数。这些统计由后端轻量查询并缓存，不在前端写死。
+网页右上角的“数据库状态”会读取 `/health` 的实际诊断结果，展示 PostgreSQL 版本、数据库大小、只读状态、时间范围及主要表行数。这些统计由后端轻量只读查询并缓存，不在前端写死。
 
 如需重新下载并构建：
 
@@ -39,14 +39,14 @@ New-Item -ItemType Directory -Force data/raw | Out-Null
 Invoke-WebRequest `
   -Uri "https://www.kaggle.com/api/v1/datasets/download/olistbr/brazilian-ecommerce" `
   -OutFile data/raw/olist.zip
-uv run python scripts/load_olist.py --replace
+uv run python scripts/load_olist_postgres.py --replace
 ```
 
-数据库文件、原始压缩包和 `.env` 不提交到 Git。其他开发者可通过 ETL 脚本重建同一数据结构。
+运行 loader 前需在 `.env` 中配置迁移账号的 `BI_MIGRATION_DATABASE_URL`。原始压缩包、数据库 volume 和 `.env` 不提交到 Git。Production Agent 的 `BI_DATABASE_URL` 必须使用 `agent_readonly`，不能使用迁移账号。
 
 ## 首次安装
 
-需要 Windows、Python 3.12+ 和 [uv](https://docs.astral.sh/uv/)。
+本地运行需要 Python 3.12+、[uv](https://docs.astral.sh/uv/) 和 PostgreSQL 17。
 
 ```powershell
 cd C:\Users\10475\AI_PROJECT\multi_agent_bi
@@ -54,13 +54,14 @@ uv sync --locked
 Copy-Item .env.example .env
 ```
 
-在 `.env` 中配置 `DEEPSEEK_API_KEY`。不要把 `.env` 或密钥提交到仓库。
+在 `.env` 中配置 `DEEPSEEK_API_KEY`、PostgreSQL 初始化凭证、`BI_MIGRATION_DATABASE_URL` 和只读的 `BI_DATABASE_URL`。不要把 `.env` 或密钥提交到仓库。
 
 ## 启动方式一：PowerShell
 
 ```powershell
 cd C:\Users\10475\AI_PROJECT\multi_agent_bi
 uv sync --locked
+uv run python scripts/load_olist_postgres.py --replace
 uv run python api.py
 ```
 
@@ -122,9 +123,7 @@ uv run python scripts/manual_test.py --trace "按月统计2017年已签收商品
 uv sync --locked
 uv run pytest -q tests
 uv run ruff check api.py launcher.pyw src tests scripts
-uv run python scripts/audit_olist.py
-uv run python scripts/run_olist_golden.py
-uv run python scripts/run_olist_golden.py --cases data/olist_advanced_queries.json
+uv run python benchmarks/run_benchmark.py --suite business
 ```
 
 只测试模型连通性：
@@ -133,21 +132,14 @@ uv run python scripts/run_olist_golden.py --cases data/olist_advanced_queries.js
 uv run python scripts/smoke_test_deepseek.py
 ```
 
-真实模型批量测试会产生 API 调用：
+真实模型 benchmark 会产生 API 调用：
 
 ```powershell
-uv run python scripts/batch_test_live.py
+uv run python benchmarks/run_benchmark.py --live-agent --suite business --case-id B001
 ```
 
-数据库与 Agent 性能测试：
+## 数据库架构
 
-```powershell
-uv run python scripts/performance_test.py --mode db
-uv run python scripts/performance_test.py --mode live --live-levels 1 --live-base-requests 12
-```
+Production runtime 只支持 PostgreSQL。`BI_DATABASE_URL` 是正式数据库连接，`BI_DATA_AS_OF_DATE` 可覆盖业务快照日期，`BI_SEMANTIC_MODEL` 可覆盖语义模型文件。
 
-## 数据库切换与扩展
-
-数据库优先级为：`BI_DB_PATH` 环境变量、`data/active_dataset.json`、`data/mock_db.sqlite`。可用 `BI_DATA_AS_OF_DATE` 指定业务快照日期，用 `BI_SEMANTIC_MODEL` 指定语义模型。
-
-当前 SQLite 适合本地面试演示。进入千万到亿级明细后，可保持 Agent 与语义层接口不变，将执行适配器替换为 DuckDB、PostgreSQL 或云数仓，并继续使用物化汇总表、指标治理与 golden SQL 回归。
+项目最初使用 SQLite 原型，完成 85/85 确定性跨数据库 parity 后迁移到 PostgreSQL。迁移前的 SQLite benchmark baseline 仍保留在 `benchmarks/results/`，但 SQLite 不再属于当前 Production runtime。

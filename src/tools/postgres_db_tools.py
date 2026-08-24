@@ -15,12 +15,12 @@ from urllib.parse import urlsplit
 from src.config import (
     DB_MAX_CONCURRENCY,
     DB_QUEUE_TIMEOUT_SECONDS,
+    DEFAULT_SEMANTIC_MODEL,
     MAX_RESULT_ROWS,
     SCHEMA_DETAIL_MAX_TABLES,
     SCHEMA_MAX_TABLES,
     SCHEMA_SAMPLE_ROWS,
     SQL_TIMEOUT_SECONDS,
-    get_active_dataset_manifest,
     get_database_url,
 )
 from src.policy import policy_limit
@@ -357,11 +357,7 @@ def _load_semantic_model() -> dict[str, Any]:
     if configured:
         path = Path(configured).expanduser().resolve()
     else:
-        manifest, manifest_path = get_active_dataset_manifest()
-        semantic_model = manifest.get("semantic_model")
-        if not semantic_model:
-            return {}
-        path = (manifest_path.parent / str(semantic_model)).resolve()
+        path = DEFAULT_SEMANTIC_MODEL
     if not path.is_file():
         return {}
     try:

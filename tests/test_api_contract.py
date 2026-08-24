@@ -17,20 +17,18 @@ class ApiContractTests(unittest.TestCase):
                 "api.get_database_health_summary",
                 return_value={
                     "status": "ready",
-                    "file": "fixture.sqlite",
+                    "backend": "postgresql",
+                    "database": "multi_agent_bi",
+                    "database_label": "postgres:5432/multi_agent_bi",
+                    "server_version": "17.11",
                     "bytes": 123,
                     "size_mib": 0.1,
                     "read_only": True,
-                    "integrity_check": "ok",
-                    "foreign_key_violations": 0,
+                    "statement_timeout": "5s",
                     "date_range": ["2018-01-01", "2018-10-17"],
                     "table_counts": {"orders": 3},
                     "semantic_table_counts": {},
                 },
-            ),
-            patch(
-                "api.get_active_dataset_manifest",
-                return_value=({"name": "fixture"}, object()),
             ),
             patch("api.get_data_as_of_date", return_value="2018-10-17"),
         ):
@@ -38,8 +36,10 @@ class ApiContractTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
-        self.assertEqual(response.json()["database"]["dataset"], "fixture")
-        self.assertEqual(response.json()["database"]["file"], "fixture.sqlite")
+        self.assertEqual(
+            response.json()["database"]["dataset"], "olist_brazilian_ecommerce"
+        )
+        self.assertEqual(response.json()["database"]["backend"], "postgresql")
 
     def test_request_runs_workflow_once_and_uses_production_version(self) -> None:
         final_state = create_initial_state("question", as_of_date="2026-07-17")

@@ -1,4 +1,4 @@
-"""Load the Olist CSV bundle into PostgreSQL using the frozen SQLite ETL rules."""
+"""Load the Olist CSV bundle into the PostgreSQL production warehouse."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.load_olist import (  # noqa: E402
+from scripts.olist_source import (  # noqa: E402
     DEFAULT_SOURCE,
     SEMANTIC_MODEL,
     csv_rows,
@@ -133,7 +133,7 @@ def _read_sql(path: Path) -> str:
 def _geolocation_rows(
     rows: Iterable[dict[str, str]],
 ) -> tuple[int, list[Sequence[Any]]]:
-    """Apply the same prefix aggregation and deterministic mode used by SQLite."""
+    """Apply deterministic postal-prefix aggregation to source geolocation rows."""
     coordinates: dict[int, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])
     locations: dict[int, Counter[tuple[str | None, str | None]]] = defaultdict(Counter)
     raw_count = 0

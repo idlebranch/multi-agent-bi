@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from benchmarks.run_postgres_parity import _apply_comparison_overrides, load_postgres_gold
+from benchmarks.postgres_gold import load_postgres_gold
 from benchmarks.schema import apply_evaluation_overrides, load_business_cases
 from scripts.load_olist_postgres import BASE_TABLES, SEMANTIC_TABLES, TABLE_COLUMNS
 from src.tools import postgres_db_tools
@@ -47,22 +47,6 @@ class PostgresMigrationContractTests(unittest.TestCase):
         self.assertEqual(len(payload["portable_case_ids"]), 68)
         self.assertEqual(len(payload["queries"]), 17)
 
-    def test_postgres_parity_applies_gold_comparison_overrides_to_both_sides(self) -> None:
-        quarter_rows = [{"quarter": "2018-Q1", "order_count": 10}]
-        self.assertEqual(
-            _apply_comparison_overrides(
-                {"comparison_gold_transform": "split_year_quarter"}, quarter_rows
-            ),
-            [{"year": "2018", "quarter": "Q1", "order_count": 10}],
-        )
-        projected_rows = [{"category_name": "books", "order_count": 2, "aov": 10.0}]
-        self.assertEqual(
-            _apply_comparison_overrides(
-                {"comparison_gold_columns": ["category_name", "aov"]}, projected_rows
-            ),
-            [{"category_name": "books", "aov": 10.0}],
-        )
-
     def test_application_policy_rejects_write_and_admin_sql(self) -> None:
         dangerous = (
             "INSERT INTO orders(order_id) VALUES ('x')",
@@ -71,6 +55,7 @@ class PostgresMigrationContractTests(unittest.TestCase):
             "CREATE TABLE probe(id INTEGER)",
             "DROP TABLE orders",
             "ALTER TABLE orders ADD COLUMN probe INTEGER",
+            "TRUNCATE TABLE orders",
             "WITH changed AS (DELETE FROM orders RETURNING *) SELECT * FROM changed",
             "COPY orders TO STDOUT",
             "SET statement_timeout = 0",
@@ -156,6 +141,7 @@ class PostgresIntegrationTests(unittest.TestCase):
             "CREATE": "CREATE TABLE readonly_probe(id INTEGER)",
             "DROP": "DROP TABLE orders",
             "ALTER": "ALTER TABLE orders ADD COLUMN readonly_probe INTEGER",
+            "TRUNCATE": "TRUNCATE TABLE orders",
         }
         with psycopg.connect(self.database_url) as connection:
             self.assertEqual(connection.execute("SHOW default_transaction_read_only").fetchone()[0], "on")

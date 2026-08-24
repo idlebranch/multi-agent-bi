@@ -1,4 +1,4 @@
--- Physical semantic tables preserve the definitions used by the frozen SQLite build.
+-- Physical semantic tables implement the governed Olist business metrics.
 
 CREATE TABLE order_financials AS
 WITH item_totals AS (

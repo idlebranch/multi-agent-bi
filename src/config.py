@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import json
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
@@ -20,23 +19,9 @@ load_dotenv()
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DATASET_MANIFEST = PROJECT_ROOT / "data" / "active_dataset.json"
-
-
-def get_active_dataset_manifest() -> tuple[dict[str, Any], Path]:
-    """Load the active local dataset manifest, if one has been generated."""
-    configured = os.getenv("BI_DATASET_MANIFEST")
-    path = Path(configured).expanduser() if configured else DEFAULT_DATASET_MANIFEST
-    path = path.resolve()
-    if not path.is_file():
-        return {}, path
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"invalid dataset manifest: {path}") from exc
-    if not isinstance(payload, dict):
-        raise RuntimeError(f"dataset manifest must contain a JSON object: {path}")
-    return payload, path
+DEFAULT_SEMANTIC_MODEL = PROJECT_ROOT / "data" / "olist_semantic_model.json"
+DEFAULT_DATA_AS_OF_DATE = "2018-10-17"
+DATASET_NAME = "olist_brazilian_ecommerce"
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -85,14 +70,7 @@ def get_data_as_of_date() -> str:
             return date.fromisoformat(configured).isoformat()
         except ValueError as exc:
             raise RuntimeError("BI_DATA_AS_OF_DATE must use YYYY-MM-DD format") from exc
-    manifest, _ = get_active_dataset_manifest()
-    manifest_date = manifest.get("as_of_date")
-    if manifest_date:
-        try:
-            return date.fromisoformat(str(manifest_date)).isoformat()
-        except ValueError as exc:
-            raise RuntimeError("dataset manifest as_of_date must use YYYY-MM-DD format") from exc
-    return date.today().isoformat()
+    return DEFAULT_DATA_AS_OF_DATE
 
 
 @lru_cache(maxsize=4)

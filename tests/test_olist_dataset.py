@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 import os
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -14,17 +12,7 @@ from src.nodes.sql_generation import sql_generation_node
 from src.nodes.sql_review import sql_review_node
 from src.nodes.sql_validation import sql_validation_node
 from src.state import create_initial_state
-from benchmarks.sqlite_reference import (
-    execute_sqlite,
-    get_sqlite_db_overview,
-    validate_sqlite,
-)
 from src.workflow import run_graph_once
-
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-OLIST_DB = PROJECT_ROOT / "data" / "olist.sqlite"
-GOLDEN_QUERIES = PROJECT_ROOT / "data" / "olist_golden_queries.json"
 
 
 class FakeLLM:
@@ -35,8 +23,7 @@ class FakeLLM:
         return SimpleNamespace(content=self.content)
 
 
-@unittest.skipUnless(OLIST_DB.is_file(), "local Olist database has not been built")
-class OlistDatasetTests(unittest.TestCase):
+class OlistWorkflowIntegrationTests(unittest.TestCase):
     def _use_test_database(self) -> None:
         previous = os.environ.get("BI_DATABASE_URL")
         os.environ["BI_DATABASE_URL"] = os.environ["BI_TEST_DATABASE_URL"]
@@ -48,33 +35,6 @@ class OlistDatasetTests(unittest.TestCase):
                 os.environ["BI_DATABASE_URL"] = previous
 
         self.addCleanup(restore)
-
-    def test_catalog_exposes_relations_views_and_metrics(self) -> None:
-        catalog = get_sqlite_db_overview(OLIST_DB)
-        self.assertIn("order_items", catalog)
-        self.assertIn("order_financials", catalog)
-        self.assertIn("category_sales_summary", catalog)
-        self.assertIn("delivery_kpis", catalog)
-        self.assertIn("payment_type_summary", catalog)
-        self.assertIn("customer_order_summary", catalog)
-        self.assertIn("customer_unique_id", catalog)
-        self.assertIn("delivered_gmv", catalog)
-
-    def test_golden_queries_are_safe_valid_and_stable(self) -> None:
-        cases = json.loads(GOLDEN_QUERIES.read_text(encoding="utf-8"))
-        for case in cases:
-            with self.subTest(name=case["name"]):
-                validation = validate_sqlite(case["sql"], OLIST_DB)
-                self.assertTrue(validation["valid"], validation["error"])
-                result = execute_sqlite(
-                    case["sql"], OLIST_DB, max_rows=500, timeout_seconds=10
-                )
-                self.assertTrue(result["success"], result["error"])
-                self.assertFalse(result["truncated"])
-                self.assertGreaterEqual(result["row_count"], case.get("min_rows", 1))
-                expected_first_row = case.get("expected_first_row")
-                if expected_first_row is not None:
-                    self.assertEqual(result["data"][0], expected_first_row)
 
     @unittest.skipUnless(
         os.getenv("BI_TEST_DATABASE_URL"), "PostgreSQL integration database is unavailable"
