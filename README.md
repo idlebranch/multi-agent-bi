@@ -191,7 +191,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/ask `
 
 ## Testing / CI
 
-普通 CI 不配置 DeepSeek、不下载完整 Olist，而是构建 deterministic PostgreSQL fixture；随后运行 Ruff、114-test pytest suite、数据库 readonly/integration tests 和 Docker non-root build contract。
+普通 CI 不配置 DeepSeek、不下载完整 Olist，而是构建 deterministic PostgreSQL fixture；随后运行 Ruff、116-test pytest suite、数据库 readonly/integration tests 和 Docker non-root build contract。
 
 ```powershell
 uv sync --locked
@@ -200,7 +200,7 @@ uv run pytest -q -m "not live_llm"
 docker build --tag multi-agent-bi:ci .
 ```
 
-最终本地回归：**114 passed、72 subtests passed**；2 个只针对 CI synthetic fixture 的断言在完整本地 warehouse 上跳过。Live benchmark 会产生真实 API 费用，只能显式手动运行：
+最终本地回归：**114 passed、72 subtests passed**；2 个只针对 CI synthetic fixture 的断言在完整本地 warehouse 上跳过。最终 GitHub Actions fixture 运行：**116 passed、88 subtests passed、66% coverage**。Live benchmark 会产生真实 API 费用，只能显式手动运行：
 
 ```powershell
 uv run python benchmarks/run_benchmark.py --live-agent --suite all
