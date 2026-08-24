@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from src.tools.db_tools import (
     execute_sql,
+    get_database_health_summary,
     get_db_overview,
     get_db_schema,
     validate_read_only_sql,
@@ -111,6 +112,15 @@ class DatabaseToolsTests(unittest.TestCase):
         self.assertIn("Table: orders", detail)
         self.assertIn("Table: customers", detail)
         self.assertIn("orders.customer_id -> customers.id", detail)
+
+    def test_health_summary_is_read_only_and_cached(self) -> None:
+        first = get_database_health_summary(force_refresh=True)
+        second = get_database_health_summary()
+        self.assertEqual(first["integrity_check"], "ok")
+        self.assertTrue(first["read_only"])
+        self.assertEqual(first["foreign_key_violations"], 0)
+        self.assertEqual(first["table_counts"]["orders"], 3)
+        self.assertEqual(first, second)
 
 
 if __name__ == "__main__":

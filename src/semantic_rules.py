@@ -109,6 +109,11 @@ def identify_metric(question: str) -> MetricName | None:
     ):
         return "orders_by_status"
     if (
+        _contains_any(value, ("销售趋势", "销售走势", "sales trend", "revenue trend"))
+        and _contains_any(value, ("月", "最近", "过去", "month", "recent", "last"))
+    ):
+        return "monthly_delivered_gmv"
+    if (
         _contains_any(value, ("每月", "按月", "monthly", "by month"))
         and _contains_any(value, ("gmv", "销售额", "成交额", "revenue"))
     ):
@@ -208,6 +213,27 @@ def question_requests_time_scope(question: str) -> bool:
                 "by year",
             ),
         )
+    )
+
+
+def question_uses_relative_time(question: str) -> bool:
+    value = question.casefold()
+    return _contains_any(
+        value,
+        (
+            "最近",
+            "过去",
+            "上月",
+            "本月",
+            "去年",
+            "今年",
+            "recent",
+            "last month",
+            "past ",
+            "this month",
+            "last year",
+            "this year",
+        ),
     )
 
 
@@ -521,6 +547,16 @@ def review_sql_semantics(question: str, sql: str) -> list[ReviewIssue]:
                 _issue(
                     "missing_status_filter",
                     "Delivered category GMV from product_sales requires "
+                    "order_status = 'delivered'.",
+                )
+            )
+
+    elif metric in {"monthly_delivered_gmv", "top_seller_state_gmv"}:
+        if "product_sales" in value and not _contains_delivered_filter(value):
+            issues.append(
+                _issue(
+                    "missing_status_filter",
+                    "Delivered GMV from product_sales requires "
                     "order_status = 'delivered'.",
                 )
             )

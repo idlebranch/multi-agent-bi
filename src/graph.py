@@ -1,4 +1,4 @@
-"""Stable BI workflow with deterministic orchestration."""
+"""Production BI workflow with deterministic, bounded orchestration."""
 
 from __future__ import annotations
 

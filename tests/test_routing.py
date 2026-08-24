@@ -12,6 +12,13 @@ class RoutingTests(unittest.TestCase):
         state["iteration"] = 1
         self.assertEqual(decide_next_node(state).next_node, "schema_linking")
 
+    def test_preclassified_request_stops_before_catalog(self) -> None:
+        for question in ("哪个商品最好？", "分析员工绩效。"):
+            with self.subTest(question=question):
+                state = create_initial_state(question, as_of_date="2018-10-17")
+                state["iteration"] = 1
+                self.assertEqual(decide_next_node(state).next_node, "format_answer")
+
     def test_successful_empty_query_finishes(self) -> None:
         state = create_initial_state("question", as_of_date="2026-07-17")
         state.update(

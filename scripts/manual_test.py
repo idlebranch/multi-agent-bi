@@ -18,8 +18,7 @@ from src.config import (  # noqa: E402
     get_active_dataset_manifest,
     get_data_as_of_date,
 )
-from src.graph import app as stable_graph  # noqa: E402
-from src.graph_v2 import app_v2 as experimental_graph  # noqa: E402
+from src.graph import app as production_graph  # noqa: E402
 from src.guardrails import sanitize_public_value, sanitize_result_rows  # noqa: E402
 from src.policy import policy_limit  # noqa: E402
 from src.state import create_initial_state  # noqa: E402
@@ -68,6 +67,7 @@ def render_result(final_state: dict[str, Any], trace: list[dict], *, show_trace:
     print("\n" + "-" * 72)
     print(f"Run ID : {final_state.get('run_id', '')}")
     print(f"输入防护: {final_state.get('input_guard_status', 'unknown')}")
+    print(f"响应分类: {final_state.get('response_status', 'unknown')}")
     if final_state.get("input_risk_flags"):
         print(f"风险标记: {', '.join(final_state['input_risk_flags'])}")
 
@@ -126,6 +126,11 @@ def render_result(final_state: dict[str, Any], trace: list[dict], *, show_trace:
         f"validation={final_state.get('validation_status')} | "
         f"execution={final_state.get('execution_status')}"
     )
+    print(
+        "[性能] "
+        f"total={final_state.get('total_duration_ms', 0):.1f} ms | "
+        f"repairs={max(0, len(final_state.get('sql_attempt_history', [])) - 1)}"
+    )
 
     if show_trace:
         print("\n[完整 Trace]")
@@ -136,13 +141,11 @@ def render_result(final_state: dict[str, Any], trace: list[dict], *, show_trace:
 def run_question(
     question: str,
     *,
-    version: str,
     max_iterations: int,
     show_trace: bool,
 ) -> dict[str, Any]:
-    graph = experimental_graph if version == "v2" else stable_graph
     initial_state = create_initial_state(question, max_iterations=max_iterations)
-    final_state, trace = run_graph_once(graph, initial_state)
+    final_state, trace = run_graph_once(production_graph, initial_state)
     render_result(final_state, trace, show_trace=show_trace)
     return final_state
 
@@ -152,8 +155,6 @@ def print_help() -> None:
         """
 命令：
   /examples   显示可直接测试的问题
-  /v1         切换到稳定工作流（推荐）
-  /v2         切换到实验恢复工作流
   /trace on   显示每个节点的完整 trace
   /trace off  隐藏完整 trace
   /status     显示当前数据集和模型配置
@@ -165,11 +166,11 @@ def print_help() -> None:
     )
 
 
-def interactive_loop(*, version: str, max_iterations: int, show_trace: bool) -> int:
+def interactive_loop(*, max_iterations: int, show_trace: bool) -> int:
     print_environment()
     while True:
         try:
-            value = input(f"\nBI[{version}]> ").strip()
+            value = input("\nBI[Production]> ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n已退出。")
             return 0
@@ -190,10 +191,6 @@ def interactive_loop(*, version: str, max_iterations: int, show_trace: bool) -> 
         if command == "/status":
             print_environment()
             continue
-        if command in {"/v1", "/v2"}:
-            version = command[1:]
-            print(f"已切换到 {version}。")
-            continue
         if command in {"/trace on", "/trace off"}:
             show_trace = command.endswith("on")
             print(f"完整 trace：{'开启' if show_trace else '关闭'}")
@@ -202,7 +199,6 @@ def interactive_loop(*, version: str, max_iterations: int, show_trace: bool) -> 
         try:
             run_question(
                 value,
-                version=version,
                 max_iterations=max_iterations,
                 show_trace=show_trace,
             )
@@ -214,7 +210,6 @@ def parse_args() -> argparse.Namespace:
     policy_max = int(policy_limit("workflow_iterations", 12))
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("question", nargs="*", help="单次测试问题；省略则进入交互模式")
-    parser.add_argument("--version", choices=("v1", "v2"), default="v1")
     parser.add_argument(
         "--max-iterations",
         type=int,
@@ -231,13 +226,11 @@ def main() -> int:
     if question:
         run_question(
             question,
-            version=args.version,
             max_iterations=args.max_iterations,
             show_trace=args.trace,
         )
         return 0
     return interactive_loop(
-        version=args.version,
         max_iterations=args.max_iterations,
         show_trace=args.trace,
     )

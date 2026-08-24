@@ -34,6 +34,32 @@ _RISK_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             re.IGNORECASE,
         ),
     ),
+    (
+        "database_write",
+        re.compile(
+            r"\b(?:insert|update|delete|drop|alter|create|attach|detach|pragma|"
+            r"replace|truncate|vacuum|reindex)\b|"
+            r"(?:删除|删掉|清空|更新|插入|新增|创建|建表|删表|修改).{0,24}"
+            r"(?:数据库|数据表|表结构|记录|权限|orders\s*表|customers\s*表)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "multiple_statements",
+        re.compile(
+            r";\s*(?:select|with|insert|update|delete|drop|alter|create|attach|"
+            r"detach|pragma|replace|truncate)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "execution_fabrication",
+        re.compile(
+            r"(?:返回|声称|假装|伪造).{0,12}(?:执行)?成功|"
+            r"(?:pretend|claim|report).{0,20}(?:executed|success|succeeded)",
+            re.IGNORECASE,
+        ),
+    ),
 )
 
 _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
@@ -63,10 +89,110 @@ def detect_prompt_injection_signals(value: str) -> list[str]:
 def screen_user_question(question: str) -> dict[str, Any]:
     normalized = normalize_untrusted_text(question, max_chars=2000).strip()
     flags = detect_prompt_injection_signals(normalized)
+    classification = classify_business_question(normalized)
+    if flags:
+        classification = {
+            "request_status": "rejected",
+            "request_message": (
+                "请求包含数据库写入或规则绕过指令，已被安全策略拒绝。"
+                "该系统只允许只读查询。"
+            ),
+            "clarification_options": [],
+        }
     return {
         "question": normalized,
-        "status": "blocked" if flags else "passed",
+        "status": "rejected" if flags else "passed",
         "risk_flags": flags,
+        **classification,
+    }
+
+
+def classify_business_question(question: str) -> dict[str, Any]:
+    """Classify deterministic UX cases before schema linking or model calls."""
+    value = question.casefold().strip()
+    product_terms = ("商品", "产品", "product", "products")
+    best_terms = ("最好", "最佳", "最优", "best", "top")
+    metric_terms = (
+        "销售额",
+        "gmv",
+        "销量",
+        "销售量",
+        "评分",
+        "评价",
+        "订单量",
+        "订单数",
+        "revenue",
+        "sales",
+        "rating",
+        "orders",
+    )
+    if (
+        any(term in value for term in product_terms)
+        and any(term in value for term in best_terms)
+        and not any(term in value for term in metric_terms)
+    ):
+        return {
+            "request_status": "clarification_required",
+            "request_message": (
+                "你希望按照哪个指标判断商品最好：销售额、销量、平均评分，"
+                "还是订单量？"
+            ),
+            "clarification_options": [
+                {"label": "按销售额", "question": "销售额最高的五个商品是什么？"},
+                {"label": "按销量", "question": "销量最高的五个商品是什么？"},
+                {"label": "按评分", "question": "平均评分最高的五个商品是什么？"},
+                {"label": "按订单量", "question": "订单量最高的五个商品是什么？"},
+            ],
+        }
+
+    employee_terms = (
+        "员工",
+        "雇员",
+        "部门",
+        "人力资源",
+        "绩效",
+        "薪资",
+        "employee",
+        "staff",
+        "department",
+        "salary",
+        "human resources",
+    )
+    if any(term in value for term in employee_terms):
+        return {
+            "request_status": "out_of_scope",
+            "request_message": (
+                "当前 Olist 数据库不包含员工、部门或绩效数据，"
+                "因此无法进行员工绩效分析。"
+            ),
+            "clarification_options": [],
+        }
+
+    china_region_terms = (
+        "华东",
+        "华南",
+        "华北",
+        "华中",
+        "西南地区",
+        "西北地区",
+        "东北地区",
+        "east china",
+    )
+    if any(term in value for term in china_region_terms):
+        return {
+            "request_status": "out_of_scope",
+            "request_message": (
+                "当前 Olist 数据库使用巴西州代码记录客户地区，不包含中国“华东地区”"
+                "字段或对应关系，因此无法可靠统计华东地区订单。你可以改为查询某个巴西州，"
+                "例如 SP、RJ 或 MG。"
+            ),
+            "clarification_options": [],
+        }
+
+    return {
+        "request_status": "ready",
+        "request_message": "",
+        "clarification_options": [],
     }
 
 

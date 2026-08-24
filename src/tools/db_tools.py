@@ -55,6 +55,12 @@ _EFFECTIVE_QUEUE_TIMEOUT = min(
     float(policy_limit("database_queue_timeout_seconds", 10)),
 )
 _EXECUTION_SEMAPHORE = threading.BoundedSemaphore(_EFFECTIVE_DB_CONCURRENCY)
+_HEALTH_CACHE_LOCK = threading.Lock()
+_HEALTH_CACHE: dict[str, Any] = {
+    "key": None,
+    "expires_at": 0.0,
+    "payload": None,
+}
 
 
 def get_db_path(db_path: str | Path | None = None) -> Path:
@@ -88,6 +94,99 @@ def readonly_connection(
         yield conn
     finally:
         conn.close()
+
+
+def get_database_health_summary(
+    *,
+    force_refresh: bool = False,
+    cache_seconds: float = 300.0,
+) -> dict[str, Any]:
+    """Return cached, read-only database diagnostics for the demo UI."""
+    path = get_db_path()
+    stat = path.stat()
+    cache_key = (str(path), stat.st_mtime_ns, stat.st_size)
+    now = time.monotonic()
+
+    with _HEALTH_CACHE_LOCK:
+        if (
+            not force_refresh
+            and _HEALTH_CACHE["key"] == cache_key
+            and now < float(_HEALTH_CACHE["expires_at"])
+            and isinstance(_HEALTH_CACHE["payload"], dict)
+        ):
+            return dict(_HEALTH_CACHE["payload"])
+
+        with readonly_connection(path) as conn:
+            tables = set(_table_names(conn))
+            query_only = bool(conn.execute("PRAGMA query_only").fetchone()[0])
+            integrity = str(conn.execute("PRAGMA quick_check(1)").fetchone()[0])
+            foreign_key_violations = sum(
+                1 for _ in conn.execute("PRAGMA foreign_key_check")
+            )
+
+            main_tables = ("orders", "order_items", "payments", "reviews")
+            table_counts = {
+                table: int(
+                    conn.execute(
+                        f"SELECT COUNT(*) FROM {_quote_identifier(table)}"
+                    ).fetchone()[0]
+                )
+                for table in main_tables
+                if table in tables
+            }
+            semantic_tables = (
+                "order_financials",
+                "order_delivery_metrics",
+                "product_sales",
+                "category_sales_summary",
+                "delivery_kpis",
+                "payment_type_summary",
+                "customer_order_summary",
+            )
+            semantic_counts = {
+                table: int(
+                    conn.execute(
+                        f"SELECT COUNT(*) FROM {_quote_identifier(table)}"
+                    ).fetchone()[0]
+                )
+                for table in semantic_tables
+                if table in tables
+            }
+            date_range = [None, None]
+            if "orders" in tables:
+                order_columns = {
+                    str(row[1])
+                    for row in conn.execute('PRAGMA table_info("orders")').fetchall()
+                }
+                if "purchase_timestamp" in order_columns:
+                    row = conn.execute(
+                        "SELECT date(MIN(purchase_timestamp)), "
+                        "date(MAX(purchase_timestamp)) FROM orders"
+                    ).fetchone()
+                    date_range = [row[0], row[1]]
+
+        payload = {
+            "status": "ready",
+            "file": path.name,
+            "bytes": stat.st_size,
+            "size_mib": round(stat.st_size / 1024 / 1024, 1),
+            "read_only": query_only,
+            "integrity_check": integrity,
+            "foreign_key_violations": foreign_key_violations,
+            "date_range": date_range,
+            "table_counts": table_counts,
+            "semantic_table_counts": semantic_counts,
+            "checked_at_epoch": time.time(),
+            "cache_seconds": cache_seconds,
+        }
+        _HEALTH_CACHE.update(
+            {
+                "key": cache_key,
+                "expires_at": now + max(1.0, cache_seconds),
+                "payload": payload,
+            }
+        )
+        return dict(payload)
 
 
 def _mask_literals_comments_and_identifiers(sql: str) -> str:
