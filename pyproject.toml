@@ -21,5 +21,17 @@ dev = [
     "jupyter>=1.1.1",
     "pyinstaller>=6.0",
     "pytest>=8.3.0",
+    "pytest-cov>=7.0.0",
     "ruff>=0.15.13",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "postgres: tests that require a real PostgreSQL instance",
+    "docker_contract: static Docker and Compose deployment contracts",
+    "live_llm: paid provider tests; never selected by ordinary CI",
+]
+
+[tool.ruff]
+# Educational notebooks are outside the Production code quality gate.
+exclude = ["notebooks"]

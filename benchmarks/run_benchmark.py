@@ -29,22 +29,21 @@ from benchmarks.evaluators import (  # noqa: E402
     compare_top_k_with_boundary_ties,
     evaluate_answer,
 )
+from benchmarks.postgres_gold import load_postgres_gold  # noqa: E402
 from benchmarks.schema import (  # noqa: E402
     apply_evaluation_overrides,
     load_business_cases,
     load_safety_cases,
 )
-from benchmarks.sqlite_reference import (  # noqa: E402
-    execute_sqlite,
-    get_sqlite_reference_path,
-    sqlite_database_fingerprint,
-    validate_sqlite,
-)
 from src.config import DEEPSEEK_BASE_URL, DEEPSEEK_MODEL, get_data_as_of_date  # noqa: E402
 from src.graph import app as production_agent  # noqa: E402
 from src.guardrails import sanitize_public_value  # noqa: E402
 from src.state import create_initial_state  # noqa: E402
-from src.tools.db_tools import execute_sql  # noqa: E402
+from src.tools.db_tools import (  # noqa: E402
+    execute_sql,
+    get_database_health_summary,
+    validate_sql,
+)
 from src.workflow import run_graph_once  # noqa: E402
 
 
@@ -53,6 +52,7 @@ RESULTS_DIR = PROJECT_ROOT / "benchmarks" / "results"
 BUSINESS_CASES = CASES_DIR / "business_cases.json"
 SAFETY_CASES = CASES_DIR / "safety_cases.json"
 EVALUATION_OVERRIDES = CASES_DIR / "evaluation_overrides.json"
+POSTGRES_GOLD = CASES_DIR / "postgres_gold.json"
 KEY_TABLES = (
     "orders",
     "order_items",
@@ -71,8 +71,19 @@ KEY_TABLES = (
 )
 
 
-def database_fingerprint(path: Path) -> dict[str, Any]:
-    return sqlite_database_fingerprint(path, tables=KEY_TABLES)
+def database_fingerprint() -> dict[str, Any]:
+    """Return a stable, credential-free PostgreSQL dataset fingerprint."""
+    health = get_database_health_summary(force_refresh=True)
+    return {
+        "backend": health["backend"],
+        "database": health["database"],
+        "database_label": health["database_label"],
+        "server_version": health["server_version"],
+        "read_only": health["read_only"],
+        "date_range": [str(value) if value is not None else None for value in health["date_range"]],
+        "table_counts": health["table_counts"],
+        "semantic_table_counts": health["semantic_table_counts"],
+    }
 
 
 def _git_sha() -> str:
@@ -86,8 +97,8 @@ def _git_sha() -> str:
         return "unavailable"
 
 
-def _execute(sql: str, db_path: Path) -> dict[str, Any]:
-    validation = validate_sqlite(sql, db_path)
+def _execute(sql: str) -> dict[str, Any]:
+    validation = validate_sql(sql)
     if not validation["valid"]:
         return {
             "success": False,
@@ -97,7 +108,7 @@ def _execute(sql: str, db_path: Path) -> dict[str, Any]:
             "error": validation["error"],
             "error_code": "invalid_sql",
         }
-    return execute_sqlite(sql, db_path, max_rows=10_000, timeout_seconds=30)
+    return execute_sql(sql, max_rows=10_000, timeout_seconds=30)
 
 
 def _stage_counts(trace: list[dict[str, Any]]) -> tuple[int, int, int]:
@@ -152,11 +163,11 @@ def compare_case_results(
     )
 
 
-def run_business_case(case: dict[str, Any], db_path: Path) -> dict[str, Any]:
+def run_business_case(case: dict[str, Any]) -> dict[str, Any]:
     started = time.perf_counter()
     gold_execution: dict[str, Any] | None = None
     if case["gold_sql"]:
-        gold_execution = _execute(str(case["gold_sql"]), db_path)
+        gold_execution = _execute(str(case["gold_sql"]))
         if not gold_execution["success"]:
             raise RuntimeError(f"invalid gold SQL in {case['case_id']}: {gold_execution['error']}")
 
@@ -296,7 +307,7 @@ def run_business_case(case: dict[str, Any], db_path: Path) -> dict[str, Any]:
     )
 
 
-def validate_business_case(case: dict[str, Any], db_path: Path) -> dict[str, Any]:
+def validate_business_case(case: dict[str, Any]) -> dict[str, Any]:
     started = time.perf_counter()
     if case["expected_behavior"] != "query":
         return {
@@ -307,7 +318,7 @@ def validate_business_case(case: dict[str, Any], db_path: Path) -> dict[str, Any
             "gold_row_count": None,
             "latency_seconds": round(time.perf_counter() - started, 3),
         }
-    execution = _execute(str(case["gold_sql"]), db_path)
+    execution = _execute(str(case["gold_sql"]))
     return {
         "case_id": case["case_id"],
         "category": case["category"],
@@ -570,12 +581,11 @@ def markdown_summary(report: dict[str, Any]) -> str:
             "",
             "## Database protection",
             "",
-            f"- Before SHA-256: `{report['database_before']['sha256']}`",
-            f"- After SHA-256: `{report['database_after']['sha256']}`",
-            f"- Integrity before/after: `{report['database_before']['integrity_check']}` / "
-            f"`{report['database_after']['integrity_check']}`",
-            f"- Foreign-key violations before/after: {report['database_before']['foreign_key_violations']} / "
-            f"{report['database_after']['foreign_key_violations']}",
+            f"- Backend: `{report['database_before']['backend']}`",
+            f"- Database: `{report['database_before']['database_label']}`",
+            f"- Read-only before/after: `{report['database_before']['read_only']}` / "
+            f"`{report['database_after']['read_only']}`",
+            f"- Dataset fingerprint unchanged: `{report['database_unchanged']}`",
             "- Safety execution is intercepted and counted; any call makes the case fail.",
             "",
         ]
@@ -614,18 +624,24 @@ def main() -> int:
     business_cases = apply_evaluation_overrides(
         load_business_cases(BUSINESS_CASES), EVALUATION_OVERRIDES
     )
+    postgres_gold = load_postgres_gold(business_cases, POSTGRES_GOLD)
+    business_cases = [
+        {**case, "gold_sql": postgres_gold[str(case["case_id"])]}
+        if case["expected_behavior"] == "query"
+        else case
+        for case in business_cases
+    ]
     safety_cases = load_safety_cases(SAFETY_CASES)
     business_cases = _select(business_cases, args, safety=False) if args.suite in {"all", "business"} else []
     safety_cases = _select(safety_cases, args, safety=True) if args.suite in {"all", "safety"} else []
-    db_path = get_sqlite_reference_path()
-    database_before = database_fingerprint(db_path)
+    database_before = database_fingerprint()
     started = time.perf_counter()
 
     business_results: list[dict[str, Any]] = []
     safety_results: list[dict[str, Any]] = []
     for index, case in enumerate(business_cases, start=1):
         print(f"[business {index}/{len(business_cases)}] {case['case_id']}", flush=True)
-        result = run_business_case(case, db_path) if args.live_agent else validate_business_case(case, db_path)
+        result = run_business_case(case) if args.live_agent else validate_business_case(case)
         business_results.append(result)
         outcome = result.get("final_passed") if args.live_agent else result.get("gold_valid")
         print(f"  {'PASS' if outcome else 'FAIL'} {result.get('latency_seconds', 0)}s", flush=True)
@@ -642,7 +658,7 @@ def main() -> int:
                 flush=True,
             )
 
-    database_after = database_fingerprint(db_path)
+    database_after = database_fingerprint()
     database_unchanged = database_before == database_after
     timestamp = datetime.now(timezone.utc)
     report: dict[str, Any] = {

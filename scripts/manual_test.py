@@ -13,16 +13,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.config import (  # noqa: E402
+    DATASET_NAME,
     DEEPSEEK_API_KEY,
     DEFAULT_MAX_ITERATIONS,
-    get_active_dataset_manifest,
     get_data_as_of_date,
 )
 from src.graph import app as production_graph  # noqa: E402
 from src.guardrails import sanitize_public_value, sanitize_result_rows  # noqa: E402
 from src.policy import policy_limit  # noqa: E402
 from src.state import create_initial_state  # noqa: E402
-from src.tools.db_tools import get_db_path  # noqa: E402
+from src.tools.db_tools import get_database_health_summary  # noqa: E402
 from src.workflow import run_graph_once  # noqa: E402
 
 
@@ -46,17 +46,19 @@ def _json(value: Any) -> str:
 
 
 def print_environment() -> None:
-    manifest, _ = get_active_dataset_manifest()
     try:
-        database = get_db_path()
-        database_text = f"{database.name} ({database.stat().st_size / 1024 / 1024:.1f} MiB)"
-    except (FileNotFoundError, OSError, RuntimeError) as exc:
+        health = get_database_health_summary(force_refresh=True)
+        database_text = (
+            f"{health['database_label']} "
+            f"(PostgreSQL {health['server_version']}, {health['size_mib']} MiB)"
+        )
+    except RuntimeError as exc:
         database_text = f"不可用：{exc}"
 
     print("=" * 72)
     print("Multi-Agent BI 人工测试台")
     print("=" * 72)
-    print(f"数据集   : {manifest.get('name', 'mock/custom')}")
+    print(f"数据集   : {DATASET_NAME}")
     print(f"数据库   : {database_text}")
     print(f"数据日期 : {get_data_as_of_date()}")
     print(f"模型密钥 : {'已配置' if DEEPSEEK_API_KEY else '未配置（普通问题无法调用 Agent）'}")

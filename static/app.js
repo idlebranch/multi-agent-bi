@@ -463,11 +463,12 @@ function renderDatabaseHealth(health) {
     const healthItems = [
         ["服务状态", health.status === "ok" ? "正常" : "降级"],
         ["Agent", health.agent_ready ? "就绪" : "未就绪"],
-        ["数据库", database.status === "ready" ? "可访问" : "不可访问"],
-        ["文件大小", database.size_mib != null ? `${formatNumber(database.size_mib)} MiB` : "—"],
+        ["数据库", database.database_label || (database.status === "ready" ? "可访问" : "不可访问")],
+        ["数据库引擎", database.backend === "postgresql" ? "PostgreSQL" : "—"],
+        ["服务端版本", database.server_version || "—"],
+        ["数据库大小", database.size_mib != null ? `${formatNumber(database.size_mib)} MiB` : "—"],
         ["只读连接", database.read_only ? "是" : "否"],
-        ["完整性检查", database.integrity_check || "未检查"],
-        ["外键异常", formatNumber(database.foreign_key_violations ?? 0)],
+        ["查询超时", database.statement_timeout || "—"],
         ["业务日期", dateRange.filter(Boolean).join(" 至 ") || database.as_of_date || "—"],
         ["正式版本", `${health.mode || "Production"} ${health.version || ""}`.trim()],
     ];

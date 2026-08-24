@@ -13,10 +13,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
 from src.config import (
+    DATASET_NAME,
     DEEPSEEK_API_KEY,
     DEFAULT_MAX_ITERATIONS,
     MAX_ALLOWED_ITERATIONS,
-    get_active_dataset_manifest,
     get_data_as_of_date,
 )
 from src.graph import app as production_agent
@@ -383,18 +383,17 @@ async def ask(req: AskRequest) -> AskResponse:
 
 @api.get("/health")
 def health(refresh: bool = Query(default=False)) -> dict[str, Any]:
-    manifest, _ = get_active_dataset_manifest()
     try:
         diagnostics = get_database_health_summary(force_refresh=refresh)
         diagnostics.update(
             {
-                "dataset": manifest.get("name", "custom_or_mock"),
+                "dataset": DATASET_NAME,
                 "as_of_date": get_data_as_of_date(),
             }
         )
         database_ready = diagnostics.get("status") == "ready"
         status = "ok" if database_ready else "degraded"
-    except (OSError, RuntimeError):
+    except Exception:  # Health must degrade safely for any database driver failure.
         LOGGER.exception("database health check failed")
         diagnostics = {
             "status": "unavailable",

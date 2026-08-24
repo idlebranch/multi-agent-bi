@@ -1,0 +1,84 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${BI_POSTGRES_DB:-multi_agent_bi}
+      POSTGRES_USER: ${BI_POSTGRES_OWNER:-bi_owner}
+      POSTGRES_PASSWORD: ${BI_POSTGRES_OWNER_PASSWORD:?set BI_POSTGRES_OWNER_PASSWORD}
+      BI_READONLY_PASSWORD: ${BI_POSTGRES_READONLY_PASSWORD:?set BI_POSTGRES_READONLY_PASSWORD}
+    ports:
+      - "127.0.0.1:${BI_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - olist_postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  loader:
+    image: multi-agent-bi-app:local
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      BI_MIGRATION_DATABASE_URL: >-
+        postgresql://${BI_POSTGRES_OWNER:-bi_owner}:${BI_POSTGRES_OWNER_PASSWORD:?set BI_POSTGRES_OWNER_PASSWORD}@postgres:5432/${BI_POSTGRES_DB:-multi_agent_bi}
+    volumes:
+      - ./data/raw:/data/raw:ro
+    command:
+      - python
+      - scripts/load_olist_postgres.py
+      - --source
+      - /data/raw/olist.zip
+      - --manifest
+      - /tmp/postgres_dataset_manifest.json
+      - --if-empty
+
+  app:
+    image: multi-agent-bi-app:local
+    build:
+      context: .
+    restart: unless-stopped
+    depends_on:
+      loader:
+        condition: service_completed_successfully
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
+      BI_DATABASE_URL: >-
+        postgresql://agent_readonly:${BI_POSTGRES_READONLY_PASSWORD:?set BI_POSTGRES_READONLY_PASSWORD}@postgres:5432/${BI_POSTGRES_DB:-multi_agent_bi}
+      BI_DATA_AS_OF_DATE: ${BI_DATA_AS_OF_DATE:-2018-10-17}
+      BI_SEMANTIC_MODEL: /app/data/olist_semantic_model.json
+      BI_MAX_ITERATIONS: ${BI_MAX_ITERATIONS:-12}
+      BI_MAX_ALLOWED_ITERATIONS: ${BI_MAX_ALLOWED_ITERATIONS:-12}
+      BI_MAX_RESULT_ROWS: ${BI_MAX_RESULT_ROWS:-200}
+      BI_SQL_TIMEOUT_SECONDS: ${BI_SQL_TIMEOUT_SECONDS:-5}
+      BI_DB_MAX_CONCURRENCY: ${BI_DB_MAX_CONCURRENCY:-4}
+      BI_DB_QUEUE_TIMEOUT_SECONDS: ${BI_DB_QUEUE_TIMEOUT_SECONDS:-10}
+      BI_LLM_TIMEOUT_SECONDS: ${BI_LLM_TIMEOUT_SECONDS:-60}
+      BI_LLM_MAX_RETRIES: ${BI_LLM_MAX_RETRIES:-2}
+      BI_TRUST_ENV_PROXY: ${BI_TRUST_ENV_PROXY:-false}
+    ports:
+      - "127.0.0.1:${BI_APP_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json,urllib.request;
+          payload=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=5));
+          assert payload.get('status') == 'ok' and payload.get('database',{}).get('status') == 'ready'
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 15s
+
+volumes:
+  olist_postgres_data:

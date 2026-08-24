@@ -9,5 +9,3 @@
 *.cmd text eol=crlf
 
 *.png binary
-*.sqlite binary
-*.sqlite3 binary

@@ -34,7 +34,7 @@ class SemanticRuleTests(unittest.TestCase):
     def test_recent_sales_trend_requires_delivered_scope(self) -> None:
         issues = review_sql_semantics(
             "分析最近三个月的销售趋势。",
-            "SELECT strftime('%Y-%m', purchase_timestamp) AS month, "
+            "SELECT to_char(purchase_timestamp, 'YYYY-MM') AS month, "
             "SUM(price) AS gmv FROM product_sales "
             "WHERE purchase_timestamp >= '2018-08-01' GROUP BY 1",
         )
@@ -59,7 +59,7 @@ class SemanticRuleTests(unittest.TestCase):
     def test_rejects_cancellation_rate_returned_as_fraction(self) -> None:
         issues = review_sql_semantics(
             "按月计算订单取消率。",
-            "SELECT strftime('%Y-%m', purchase_timestamp) AS month, "
+            "SELECT to_char(purchase_timestamp, 'YYYY-MM') AS month, "
             "SUM(CASE WHEN status = 'canceled' THEN 1 ELSE 0 END) * 1.0 / "
             "COUNT(*) AS cancellation_rate FROM orders GROUP BY 1",
         )

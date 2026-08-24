@@ -1,4 +1,4 @@
-"""Load the Olist CSV bundle into PostgreSQL using the frozen SQLite ETL rules."""
+"""Load the Olist CSV bundle into the PostgreSQL production warehouse."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.load_olist import (  # noqa: E402
+from scripts.olist_source import (  # noqa: E402
     DEFAULT_SOURCE,
     SEMANTIC_MODEL,
     csv_rows,
@@ -133,7 +133,7 @@ def _read_sql(path: Path) -> str:
 def _geolocation_rows(
     rows: Iterable[dict[str, str]],
 ) -> tuple[int, list[Sequence[Any]]]:
-    """Apply the same prefix aggregation and deterministic mode used by SQLite."""
+    """Apply deterministic postal-prefix aggregation to source geolocation rows."""
     coordinates: dict[int, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])
     locations: dict[int, Counter[tuple[str | None, str | None]]] = defaultdict(Counter)
     raw_count = 0
@@ -296,6 +296,23 @@ def _table_counts(conn: Any, tables: Sequence[str]) -> dict[str, int]:
     return counts
 
 
+def warehouse_is_initialized(database_url: str) -> bool:
+    """Return whether the production base and semantic warehouse already contain data."""
+    try:
+        import psycopg
+    except ModuleNotFoundError as exc:
+        raise RuntimeError('install the project dependency: psycopg[binary]') from exc
+
+    with psycopg.connect(database_url) as conn:
+        row = conn.execute(
+            "SELECT to_regclass('public.orders') IS NOT NULL, "
+            "to_regclass('public.order_financials') IS NOT NULL"
+        ).fetchone()
+        if not row or not all(bool(value) for value in row):
+            return False
+        return bool(conn.execute("SELECT EXISTS (SELECT 1 FROM orders)").fetchone()[0])
+
+
 def build_database(
     source: Path,
     database_url: str,
@@ -388,7 +405,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
     parser.add_argument("--database-url", default=os.getenv("BI_MIGRATION_DATABASE_URL"))
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
-    parser.add_argument("--replace", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--replace", action="store_true")
+    mode.add_argument(
+        "--if-empty",
+        action="store_true",
+        help="load only when the PostgreSQL warehouse is not already initialized",
+    )
     parser.add_argument("--skip-readonly-grants", action="store_true")
     return parser.parse_args()
 
@@ -399,6 +422,9 @@ def main() -> int:
         print("Olist import failed: BI_MIGRATION_DATABASE_URL is not configured", file=sys.stderr)
         return 2
     try:
+        if args.if_empty and warehouse_is_initialized(str(args.database_url)):
+            print(json.dumps({"status": "reused", "backend": "postgresql"}, indent=2))
+            return 0
         payload = build_database(
             args.source,
             str(args.database_url),

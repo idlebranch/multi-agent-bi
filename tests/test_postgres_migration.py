@@ -6,7 +6,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from benchmarks.run_postgres_parity import load_postgres_gold
+import pytest
+
+from benchmarks.postgres_gold import load_postgres_gold
 from benchmarks.schema import apply_evaluation_overrides, load_business_cases
 from scripts.load_olist_postgres import BASE_TABLES, SEMANTIC_TABLES, TABLE_COLUMNS
 from src.tools import postgres_db_tools
@@ -55,6 +57,7 @@ class PostgresMigrationContractTests(unittest.TestCase):
             "CREATE TABLE probe(id INTEGER)",
             "DROP TABLE orders",
             "ALTER TABLE orders ADD COLUMN probe INTEGER",
+            "TRUNCATE TABLE orders",
             "WITH changed AS (DELETE FROM orders RETURNING *) SELECT * FROM changed",
             "COPY orders TO STDOUT",
             "SET statement_timeout = 0",
@@ -81,6 +84,7 @@ class PostgresMigrationContractTests(unittest.TestCase):
         self.assertNotIn("very-secret", label)
 
 
+@pytest.mark.postgres
 @unittest.skipUnless(
     os.getenv("BI_TEST_DATABASE_URL"),
     "PostgreSQL integration database is unavailable",
@@ -95,11 +99,14 @@ class PostgresIntegrationTests(unittest.TestCase):
         self.assertTrue(set((*BASE_TABLES, *SEMANTIC_TABLES)).issubset(tables))
         overview = postgres_db_tools.get_db_overview(self.database_url)
         self.assertIn("PostgreSQL catalog", overview)
+        self.assertIn("order_id text PK", overview)
         self.assertIn("order_id -> orders.order_id", overview)
         with patch.dict(os.environ, {"BI_DATABASE_URL": self.database_url}):
             health = postgres_db_tools.get_database_health_summary(force_refresh=True)
-        self.assertEqual(health["table_counts"]["orders"], 99_441)
-        self.assertEqual(health["table_counts"]["order_items"], 112_650)
+        expected_orders = int(os.getenv("BI_EXPECTED_ORDER_COUNT", "99441"))
+        expected_items = int(os.getenv("BI_EXPECTED_ORDER_ITEM_COUNT", "112650"))
+        self.assertEqual(health["table_counts"]["orders"], expected_orders)
+        self.assertEqual(health["table_counts"]["order_items"], expected_items)
         self.assertTrue(health["read_only"])
 
     def test_select_explain_invalid_sql_and_max_rows(self) -> None:
@@ -139,6 +146,7 @@ class PostgresIntegrationTests(unittest.TestCase):
             "CREATE": "CREATE TABLE readonly_probe(id INTEGER)",
             "DROP": "DROP TABLE orders",
             "ALTER": "ALTER TABLE orders ADD COLUMN readonly_probe INTEGER",
+            "TRUNCATE": "TRUNCATE TABLE orders",
         }
         with psycopg.connect(self.database_url) as connection:
             self.assertEqual(connection.execute("SHOW default_transaction_read_only").fetchone()[0], "on")
