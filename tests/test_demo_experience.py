@@ -41,7 +41,7 @@ class DemoExperienceTests(unittest.TestCase):
         self.assertIn("grid-template-columns: minmax(0, 1fr)", css)
         self.assertIn("position: sticky", css)
 
-    def test_windows_launcher_guards_process_lifecycle(self) -> None:
+    def test_windows_launcher_uses_docker_compose_lifecycle(self) -> None:
         launcher = (ROOT / "launcher.pyw").read_text(encoding="utf-8")
 
         self.assertIn("CREATE_NO_WINDOW", launcher)
@@ -62,12 +62,19 @@ class DemoExperienceTests(unittest.TestCase):
         )
         self.assertIn("Microsoft YaHei UI", launcher)
         self.assertIn("Segoe UI", launcher)
-        self.assertIn("PID_FILE", launcher)
-        self.assertIn("pid_matches_project", launcher)
-        self.assertIn("taskkill.exe", launcher)
         self.assertIn("fetch_health", launcher)
+        self.assertIn('"info", "--format"', launcher)
+        self.assertIn('"compose", *arguments', launcher)
+        self.assertIn('"up", "-d"', launcher)
+        self.assertIn('"up", "-d", "--build"', launcher)
+        self.assertIn("Docker Desktop is not installed.", launcher)
+        self.assertIn("BI_POSTGRES_OWNER_PASSWORD", launcher)
+        self.assertIn("BI_POSTGRES_READONLY_PASSWORD", launcher)
+        self.assertIn("data/raw/olist.zip", launcher)
+        self.assertNotIn('"api.py"', launcher)
+        self.assertNotIn('".venv"', launcher)
+        self.assertNotIn("taskkill.exe", launcher)
         self.assertNotIn("DEEPSEEK_API_KEY", launcher)
-        self.assertNotIn(".env", launcher)
 
     def test_web_ui_avoids_rasterizing_scale_and_filter_rules(self) -> None:
         css = (ROOT / "static" / "styles.css").read_text(encoding="utf-8")

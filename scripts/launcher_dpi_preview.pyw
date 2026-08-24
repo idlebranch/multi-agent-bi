@@ -25,7 +25,7 @@ def main() -> None:
     root.tk.call("tk", "scaling", args.dpi / 72.0)
     window_class = launcher["LauncherWindow"]
     window_class.__init__.__globals__["get_window_dpi"] = lambda _root: args.dpi
-    window_class(root)
+    window_class(root, auto_start=False)
     root.title(f"Multi-Agent BI - logical {round(args.dpi * 100 / 96)}% DPI preview")
     root.mainloop()
 

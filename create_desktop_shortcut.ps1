@@ -10,15 +10,26 @@ if (-not (Test-Path -LiteralPath $Launcher -PathType Leaf)) {
 }
 
 $Desktop = [Environment]::GetFolderPath("Desktop")
+if (-not $Desktop) {
+    $Desktop = (Get-ItemProperty -LiteralPath `
+        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders" `
+        -Name Desktop).Desktop
+    $Desktop = [Environment]::ExpandEnvironmentVariables($Desktop)
+}
+if (-not $Desktop -or -not (Test-Path -LiteralPath $Desktop -PathType Container)) {
+    throw "Windows Desktop directory not found."
+}
 $ShortcutPath = Join-Path $Desktop "Multi-Agent BI.lnk"
 
 if ($PSCmdlet.ShouldProcess($ShortcutPath, "Create desktop shortcut")) {
     $Shell = New-Object -ComObject WScript.Shell
     $Shortcut = $Shell.CreateShortcut($ShortcutPath)
     $Shortcut.TargetPath = $Launcher
+    $Shortcut.Arguments = ""
     $Shortcut.WorkingDirectory = $ProjectRoot
     $Shortcut.IconLocation = "$Launcher,0"
-    $Shortcut.Description = "Launch the local Multi-Agent BI interview demo"
+    $Shortcut.WindowStyle = 1
+    $Shortcut.Description = "Launch Multi-Agent BI with Docker Compose"
     $Shortcut.Save()
 }
 
