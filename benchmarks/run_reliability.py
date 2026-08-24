@@ -49,6 +49,17 @@ SCENARIOS = (
 )
 
 
+def _git_sha() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "-C", str(PROJECT_ROOT), "rev-parse", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unavailable"
+
+
 def _percentile(values: list[float], fraction: float) -> float:
     ordered = sorted(values)
     index = max(0, math.ceil(fraction * len(ordered)) - 1)
@@ -152,6 +163,7 @@ def _markdown(report: dict[str, Any]) -> str:
         "# Final Reliability Report",
         "",
         f"- Timestamp (UTC): {report['metadata']['timestamp_utc']}",
+        f"- Source commit: `{report['metadata'].get('commit_sha', 'unavailable')}`",
         f"- Database: `{report['metadata']['database_label']}`",
         "- Mechanism: `threading.BoundedSemaphore` enforcing bounded database concurrency with a timed capacity wait.",
         "- There is no independent message queue, queue broker, or persistent queue length.",
@@ -227,6 +239,7 @@ def main() -> int:
     report = {
         "metadata": {
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "commit_sha": _git_sha(),
             "database_label": results[0].get("database_label", "unavailable"),
             "workload": "deterministic_read_only_postgresql",
             "llm_invoked": False,

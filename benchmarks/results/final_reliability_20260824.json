@@ -1,0 +1,345 @@
+{
+  "metadata": {
+    "timestamp_utc": "2026-08-24T14:40:06.485459+00:00",
+    "database_label": "127.0.0.1:5432/multi_agent_bi",
+    "workload": "deterministic_read_only_postgresql",
+    "llm_invoked": false,
+    "commit_sha": "b4f2a6fe0085c05ef39048d19d9abeedc4845f8b"
+  },
+  "passed": true,
+  "scenarios": [
+    {
+      "scenario": {
+        "name": "concurrency_1",
+        "limit": 1,
+        "requests": 6,
+        "workers": 6,
+        "hold_seconds": 0.05,
+        "capacity_wait_timeout_seconds": 2.0,
+        "expect_capacity_timeout": false
+      },
+      "passed": true,
+      "database_label": "127.0.0.1:5432/multi_agent_bi",
+      "mechanism": "bounded_concurrency_with_timed_wait",
+      "requests": 6,
+      "successes": 6,
+      "capacity_timeouts": 0,
+      "other_failures": 0,
+      "elapsed_seconds": 0.412,
+      "throughput_requests_per_second": 14.57,
+      "latency_ms": {
+        "average": 231.549,
+        "p50": 195.639,
+        "p95": 410.534,
+        "maximum": 410.534
+      },
+      "capacity": {
+        "attempts": 6,
+        "capacity_timeouts": 0,
+        "current_active": 0,
+        "current_waiting": 0,
+        "max_active": 1,
+        "max_waiting": 5,
+        "total_wait_ms": 978.002,
+        "mechanism": "bounded_concurrency_with_timed_wait",
+        "configured_concurrency": 1,
+        "capacity_wait_timeout_seconds": 2.0,
+        "average_wait_ms": 163.0
+      },
+      "request_results": [
+        {
+          "request_number": 0,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 67.157,
+          "capacity_wait_ms": 0.005
+        },
+        {
+          "request_number": 1,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 131.968,
+          "capacity_wait_ms": 66.514
+        },
+        {
+          "request_number": 2,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 259.773,
+          "capacity_wait_ms": 195.597
+        },
+        {
+          "request_number": 3,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 195.639,
+          "capacity_wait_ms": 131.924
+        },
+        {
+          "request_number": 4,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 324.224,
+          "capacity_wait_ms": 259.753
+        },
+        {
+          "request_number": 5,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 410.534,
+          "capacity_wait_ms": 324.209
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "name": "configured_limit",
+        "limit": 4,
+        "requests": 12,
+        "workers": 12,
+        "hold_seconds": 0.05,
+        "capacity_wait_timeout_seconds": 2.0,
+        "expect_capacity_timeout": false
+      },
+      "passed": true,
+      "database_label": "127.0.0.1:5432/multi_agent_bi",
+      "mechanism": "bounded_concurrency_with_timed_wait",
+      "requests": 12,
+      "successes": 12,
+      "capacity_timeouts": 0,
+      "other_failures": 0,
+      "elapsed_seconds": 0.22,
+      "throughput_requests_per_second": 54.631,
+      "latency_ms": {
+        "average": 136.674,
+        "p50": 133.845,
+        "p95": 217.148,
+        "maximum": 217.148
+      },
+      "capacity": {
+        "attempts": 12,
+        "capacity_timeouts": 0,
+        "current_active": 0,
+        "current_waiting": 0,
+        "max_active": 4,
+        "max_waiting": 8,
+        "total_wait_ms": 819.904,
+        "mechanism": "bounded_concurrency_with_timed_wait",
+        "configured_concurrency": 4,
+        "capacity_wait_timeout_seconds": 2.0,
+        "average_wait_ms": 68.325
+      },
+      "request_results": [
+        {
+          "request_number": 0,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 68.485,
+          "capacity_wait_ms": 0.004
+        },
+        {
+          "request_number": 1,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 66.576,
+          "capacity_wait_ms": 0.003
+        },
+        {
+          "request_number": 2,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 217.148,
+          "capacity_wait_ms": 152.727
+        },
+        {
+          "request_number": 3,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 200.18,
+          "capacity_wait_ms": 134.436
+        },
+        {
+          "request_number": 4,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 66.964,
+          "capacity_wait_ms": 0.003
+        },
+        {
+          "request_number": 5,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 66.522,
+          "capacity_wait_ms": 0.003
+        },
+        {
+          "request_number": 6,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 133.272,
+          "capacity_wait_ms": 65.449
+        },
+        {
+          "request_number": 7,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 133.997,
+          "capacity_wait_ms": 66.754
+        },
+        {
+          "request_number": 8,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 133.845,
+          "capacity_wait_ms": 66.194
+        },
+        {
+          "request_number": 9,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 152.877,
+          "capacity_wait_ms": 67.22
+        },
+        {
+          "request_number": 10,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 200.132,
+          "capacity_wait_ms": 133.939
+        },
+        {
+          "request_number": 11,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 200.089,
+          "capacity_wait_ms": 133.172
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "name": "above_limit",
+        "limit": 4,
+        "requests": 12,
+        "workers": 12,
+        "hold_seconds": 0.35,
+        "capacity_wait_timeout_seconds": 0.1,
+        "expect_capacity_timeout": true
+      },
+      "passed": true,
+      "database_label": "127.0.0.1:5432/multi_agent_bi",
+      "mechanism": "bounded_concurrency_with_timed_wait",
+      "requests": 12,
+      "successes": 4,
+      "capacity_timeouts": 8,
+      "other_failures": 0,
+      "elapsed_seconds": 0.37,
+      "throughput_requests_per_second": 32.416,
+      "latency_ms": {
+        "average": 193.057,
+        "p50": 105.456,
+        "p95": 369.506,
+        "maximum": 369.506
+      },
+      "capacity": {
+        "attempts": 12,
+        "capacity_timeouts": 8,
+        "current_active": 0,
+        "current_waiting": 0,
+        "max_active": 4,
+        "max_waiting": 8,
+        "total_wait_ms": 841.508,
+        "mechanism": "bounded_concurrency_with_timed_wait",
+        "configured_concurrency": 4,
+        "capacity_wait_timeout_seconds": 0.1,
+        "average_wait_ms": 70.126
+      },
+      "request_results": [
+        {
+          "request_number": 0,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 369.506,
+          "capacity_wait_ms": 0.004
+        },
+        {
+          "request_number": 1,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 368.752,
+          "capacity_wait_ms": 0.003
+        },
+        {
+          "request_number": 2,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 368.701,
+          "capacity_wait_ms": 0.01
+        },
+        {
+          "request_number": 3,
+          "success": false,
+          "error_code": "queue_timeout",
+          "latency_ms": 104.849,
+          "capacity_wait_ms": 104.799
+        },
+        {
+          "request_number": 4,
+          "success": false,
+          "error_code": "queue_timeout",
+          "latency_ms": 104.849,
+          "capacity_wait_ms": 104.823
+        },
+        {
+          "request_number": 5,
+          "success": true,
+          "error_code": null,
+          "latency_ms": 367.961,
+          "capacity_wait_ms": 0.003
+        },
+        {
+          "request_number": 6,
+          "success": false,
+          "error_code": "queue_timeout",
+          "latency_ms": 104.94,
+          "capacity_wait_ms": 104.916
+        },
+        {
+          "request_number": 7,
+          "success": false,
+          "error_code": "queue_timeout",
+          "latency_ms": 105.237,
+          "capacity_wait_ms": 105.207
+        },
+        {
+          "request_number": 8,
+          "success": false,
+          "error_code": "queue_timeout",
+          "latency_ms": 105.563,
+          "capacity_wait_ms": 105.5
+        },
+        {
+          "request_number": 9,
+          "success": false,
+          "error_code": "queue_timeout",
+          "latency_ms": 105.516,
+          "capacity_wait_ms": 105.489
+        },
+        {
+          "request_number": 10,
+          "success": false,
+          "error_code": "queue_timeout",
+          "latency_ms": 105.349,
+          "capacity_wait_ms": 105.319
+        },
+        {
+          "request_number": 11,
+          "success": false,
+          "error_code": "queue_timeout",
+          "latency_ms": 105.456,
+          "capacity_wait_ms": 105.435
+        }
+      ]
+    }
+  ]
+}

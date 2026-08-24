@@ -631,8 +631,11 @@ def _format_rate(metric: dict[str, Any] | None) -> str:
 
 def markdown_summary(report: dict[str, Any]) -> str:
     metrics = report.get("metrics", {})
+    report_title = report.get("metadata", {}).get(
+        "report_title", "Multi-Agent BI Benchmark Baseline"
+    )
     lines = [
-        "# Multi-Agent BI Benchmark Baseline",
+        f"# {report_title}",
         "",
         f"- Timestamp (UTC): {report['metadata']['timestamp_utc']}",
         f"- Commit: `{report['metadata']['commit_sha']}`",
@@ -641,6 +644,11 @@ def markdown_summary(report: dict[str, Any]) -> str:
         f"- Business cases: {report['case_counts']['business']}",
         f"- Safety cases: {report['case_counts']['safety']}",
         f"- Database unchanged: **{report['database_unchanged']}**",
+        *(
+            [f"- Source commit context: {report['metadata']['source_commit_context']}"]
+            if report.get("metadata", {}).get("source_commit_context")
+            else []
+        ),
         "",
         "## Core metrics",
         "",

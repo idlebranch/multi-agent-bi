@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,17 @@ from src.state import create_initial_state  # noqa: E402
 
 
 DEFAULT_CASES = PROJECT_ROOT / "benchmarks" / "cases" / "holdout_cases.json"
+
+
+def _git_sha() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "-C", str(PROJECT_ROOT), "rev-parse", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unavailable"
 
 
 def _rate(results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -104,6 +116,7 @@ def run(cases: dict[str, Any]) -> dict[str, Any]:
     return {
         "metadata": {
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "commit_sha": _git_sha(),
             "suite": "separate_final_sprint_holdouts",
             "included_in_90_business_or_25_safety_denominator": False,
             "live_llm_invoked": False,
@@ -123,6 +136,8 @@ def run(cases: dict[str, Any]) -> dict[str, Any]:
 def markdown(report: dict[str, Any]) -> str:
     lines = [
         "# Final Sprint Holdout Results",
+        "",
+        f"- Source commit: `{report['metadata'].get('commit_sha', 'unavailable')}`",
         "",
         "These holdouts are reported separately and are not included in the frozen "
         "90-business / 25-safety benchmark denominator.",

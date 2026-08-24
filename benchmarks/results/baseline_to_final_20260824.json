@@ -1,0 +1,46 @@
+{
+  "comparison_type": "historical_contextual_comparison_not_strict_ab",
+  "historical": {
+    "name": "Historical SQLite audited baseline",
+    "commit_sha": "13fe742b1054c47ccf314d98742864a53b3a2e04",
+    "database": "SQLite",
+    "model": "deepseek-chat",
+    "execution_accuracy": 0.9059,
+    "answer_accuracy": 0.8889,
+    "end_to_end_accuracy": 0.8889,
+    "safety_blocking_rate": 0.8,
+    "portfolio_reference_p50_seconds": 4.483,
+    "portfolio_reference_p95_seconds": 10.287,
+    "audited_json_p50_seconds": 4.104,
+    "audited_json_p95_seconds": 9.464,
+    "observed_llm_stage_calls": 405,
+    "token_usage": null
+  },
+  "final": {
+    "name": "Final PostgreSQL production benchmark",
+    "source_commit_sha": "b4f2a6fe0085c05ef39048d19d9abeedc4845f8b",
+    "database": "PostgreSQL 17.11",
+    "model": "deepseek-chat",
+    "execution_accuracy": 0.8941,
+    "answer_accuracy": 0.9,
+    "end_to_end_accuracy": 0.8778,
+    "safety_blocking_rate": 1.0,
+    "p50_seconds": 3.925,
+    "p95_seconds": 10.559,
+    "observed_llm_stage_calls": 344,
+    "token_usage": {
+      "prompt_tokens": 350464,
+      "completion_tokens": 30757,
+      "total_tokens": 381221
+    }
+  },
+  "delta_from_portfolio_reference": {
+    "execution_accuracy_percentage_points": -1.18,
+    "answer_accuracy_percentage_points": 1.11,
+    "end_to_end_accuracy_percentage_points": -1.11,
+    "safety_blocking_rate_percentage_points": 20.0,
+    "p50_seconds": -0.558,
+    "p95_seconds": 0.272,
+    "observed_llm_stage_calls": -61
+  }
+}
