@@ -1,5 +1,7 @@
 # Multi-Agent BI
 
+[![CI](https://github.com/idlebranch/multi-agent-bi/actions/workflows/ci.yml/badge.svg)](https://github.com/idlebranch/multi-agent-bi/actions/workflows/ci.yml)
+
 这是一个面向业务数据问答的只读 Multi-Agent 系统。项目使用 LangGraph 编排 Schema Linking、SQL Writer、SQL Reviewer、Safety Validator、只读 Executor 与 Answer Formatter；FastAPI 提供接口，PostgreSQL 17 保存 Olist Brazilian E-Commerce 公开数据。
 
 网页只提供一个 `Production` Agent。原实验恢复图保留为 legacy 代码，不再由网页、API、命令行或启动器公开调用。Production 工作流包含有限 SQL 修复：Reviewer、Safety 或 Executor 返回可修复问题时会重新进入 SQL Writer，最多修复 2 次，之后安全终止。
@@ -48,7 +50,6 @@ Compose 的一次性 `loader` 会在空 warehouse 上加载数据；已初始化
 需要 Docker Desktop、Linux containers 和 Compose。先把 Olist ZIP 放在 `data/raw/olist.zip`，然后：
 
 ```powershell
-cd C:\Users\10475\AI_PROJECT\multi_agent_bi
 Copy-Item .env.example .env
 docker compose up --build -d
 docker compose ps
@@ -78,7 +79,6 @@ uv sync --locked
 在 `.env` 中配置 `DEEPSEEK_API_KEY`、`BI_MIGRATION_DATABASE_URL` 和使用 `agent_readonly` 的 `BI_DATABASE_URL`。
 
 ```powershell
-cd C:\Users\10475\AI_PROJECT\multi_agent_bi
 uv sync --locked
 uv run python scripts/load_olist_postgres.py --replace
 uv run python api.py
@@ -93,7 +93,6 @@ uv run python api.py
 先构建一次轻量 EXE：
 
 ```powershell
-cd C:\Users\10475\AI_PROJECT\multi_agent_bi
 .\build_launcher.cmd
 ```
 
@@ -107,7 +106,7 @@ cd C:\Users\10475\AI_PROJECT\multi_agent_bi
 powershell -ExecutionPolicy Bypass -File .\create_desktop_shortcut.ps1
 ```
 
-- EXE：`C:\Users\10475\AI_PROJECT\multi_agent_bi\dist\MultiAgentBI-Launcher.exe`
+- EXE：`dist\MultiAgentBI-Launcher.exe`
 - 快捷方式：当前 Windows 用户桌面的 `Multi-Agent BI.lnk`
 - 日志：`logs\launcher.log` 与 `logs\launcher_server.log`
 
@@ -138,10 +137,20 @@ uv run python scripts/manual_test.py --trace "按月统计2017年已签收商品
 
 ## 测试
 
+普通 push 和 pull request 使用小型 synthetic PostgreSQL fixture，不下载完整 Olist ZIP，也不配置或调用 DeepSeek。CI 与生产 loader 共用 `postgres/schema.sql` 和 `postgres/semantic_tables.sql`，但数据路径彼此独立。
+
 ```powershell
 uv sync --locked
-uv run pytest -q tests
-uv run ruff check api.py launcher.pyw src tests scripts
+uv run ruff check .
+uv run pytest -q -m "not live_llm"
+docker build --tag multi-agent-bi:ci .
+```
+
+本地复现 PostgreSQL CI 时，应使用名称以 `_ci` 结尾的临时数据库，设置 `BI_MIGRATION_DATABASE_URL`、`BI_CI_READONLY_PASSWORD`、`BI_TEST_DATABASE_URL` 和 `BI_CI_FIXTURE=1`，然后运行 `uv run python scripts/init_ci_postgres.py`。初始化脚本拒绝重置名称不以 `_ci` 结尾的数据库。
+
+完整离线 benchmark 仍使用本地完整 Olist PostgreSQL warehouse：
+
+```powershell
 uv run python benchmarks/run_benchmark.py --suite business
 ```
 
@@ -151,7 +160,7 @@ uv run python benchmarks/run_benchmark.py --suite business
 uv run python scripts/smoke_test_deepseek.py
 ```
 
-真实模型 benchmark 会产生 API 调用：
+真实模型 benchmark 会产生 API 调用，只能显式手动运行，不属于普通 CI：
 
 ```powershell
 uv run python benchmarks/run_benchmark.py --live-agent --suite business --case-id B001

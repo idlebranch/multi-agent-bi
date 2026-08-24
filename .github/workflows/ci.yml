@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality and PostgreSQL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        # Fixed credentials belong only to this ephemeral service container.
+        env:
+          POSTGRES_DB: multi_agent_bi_ci
+          POSTGRES_USER: bi_owner
+          POSTGRES_PASSWORD: ci-only-owner-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bi_owner -d multi_agent_bi_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      BI_MIGRATION_DATABASE_URL: postgresql://bi_owner:ci-only-owner-password@127.0.0.1:5432/multi_agent_bi_ci
+      BI_TEST_DATABASE_URL: postgresql://agent_readonly:ci-only-readonly-password@127.0.0.1:5432/multi_agent_bi_ci
+      BI_DATABASE_URL: postgresql://agent_readonly:ci-only-readonly-password@127.0.0.1:5432/multi_agent_bi_ci
+      BI_CI_READONLY_PASSWORD: ci-only-readonly-password
+      BI_CI_FIXTURE: "1"
+      BI_EXPECTED_ORDER_COUNT: "6"
+      BI_EXPECTED_ORDER_ITEM_COUNT: "8"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.8.15"
+          enable-cache: true
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Prove live LLM credentials are absent
+        run: test -z "${DEEPSEEK_API_KEY:-}"
+      - name: Initialize deterministic PostgreSQL fixture
+        run: uv run python scripts/init_ci_postgres.py
+      - name: Ruff
+        run: uv run ruff check .
+      - name: Unit, evaluator, PostgreSQL, and readonly tests
+        run: >-
+          uv run pytest -q -m "not live_llm"
+          --cov=src --cov=api --cov=benchmarks
+          --cov-report=term-missing --cov-report=xml
+
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    needs: quality
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build Production image
+        run: docker build --tag multi-agent-bi:ci .
+      - name: Verify non-root image contract
+        run: test "$(docker image inspect multi-agent-bi:ci --format '{{.Config.User}}')" = "app:app"

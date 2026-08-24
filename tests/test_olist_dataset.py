@@ -5,6 +5,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 from src.graph import app as stable_graph
 from src.nodes.schema_linking import schema_linking_node
 from src.nodes.sql_execution import sql_execution_node
@@ -23,6 +25,7 @@ class FakeLLM:
         return SimpleNamespace(content=self.content)
 
 
+@pytest.mark.postgres
 class OlistWorkflowIntegrationTests(unittest.TestCase):
     def _use_test_database(self) -> None:
         previous = os.environ.get("BI_DATABASE_URL")

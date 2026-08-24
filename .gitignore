@@ -5,6 +5,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
 .python-version
 *.egg-info/
 
@@ -22,9 +25,9 @@ __pycache__/
 # uv
 .uv-cache/
 
-# 数据库文件(模拟数据,别人 clone 后自己跑 db_init.py 生成)
-data/*.sqlite
-data/*.sqlite-*
+# 本地数据库和原始数据
+*.db
+*.sqlite*
 data/raw/
 data/active_dataset.json
 data/*.building

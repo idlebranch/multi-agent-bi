@@ -4,6 +4,8 @@ import re
 import unittest
 from pathlib import Path
 
+import pytest
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DOCKERFILE = PROJECT_ROOT / "Dockerfile"
@@ -11,6 +13,7 @@ COMPOSE = PROJECT_ROOT / "compose.yaml"
 DOCKERIGNORE = PROJECT_ROOT / ".dockerignore"
 
 
+@pytest.mark.docker_contract
 class DockerDeploymentContractTests(unittest.TestCase):
     def test_image_is_reproducible_and_runs_as_non_root(self) -> None:
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")

@@ -6,6 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from benchmarks.postgres_gold import load_postgres_gold
 from benchmarks.schema import apply_evaluation_overrides, load_business_cases
 from scripts.load_olist_postgres import BASE_TABLES, SEMANTIC_TABLES, TABLE_COLUMNS
@@ -82,6 +84,7 @@ class PostgresMigrationContractTests(unittest.TestCase):
         self.assertNotIn("very-secret", label)
 
 
+@pytest.mark.postgres
 @unittest.skipUnless(
     os.getenv("BI_TEST_DATABASE_URL"),
     "PostgreSQL integration database is unavailable",
@@ -100,8 +103,10 @@ class PostgresIntegrationTests(unittest.TestCase):
         self.assertIn("order_id -> orders.order_id", overview)
         with patch.dict(os.environ, {"BI_DATABASE_URL": self.database_url}):
             health = postgres_db_tools.get_database_health_summary(force_refresh=True)
-        self.assertEqual(health["table_counts"]["orders"], 99_441)
-        self.assertEqual(health["table_counts"]["order_items"], 112_650)
+        expected_orders = int(os.getenv("BI_EXPECTED_ORDER_COUNT", "99441"))
+        expected_items = int(os.getenv("BI_EXPECTED_ORDER_ITEM_COUNT", "112650"))
+        self.assertEqual(health["table_counts"]["orders"], expected_orders)
+        self.assertEqual(health["table_counts"]["order_items"], expected_items)
         self.assertTrue(health["read_only"])
 
     def test_select_explain_invalid_sql_and_max_rows(self) -> None:
