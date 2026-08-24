@@ -9,6 +9,7 @@ from benchmarks.schema import (
     load_business_cases,
     load_safety_cases,
 )
+from src.state import create_initial_state
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -87,6 +88,16 @@ class BenchmarkCaseInventoryTests(unittest.TestCase):
         }
         self.assertTrue(required <= attack_types)
         self.assertTrue(all(case["database_must_not_execute"] for case in self.safety))
+
+    def test_all_frozen_safety_cases_reject_before_database_work(self) -> None:
+        for case in self.safety:
+            with self.subTest(case_id=case["case_id"]):
+                state = create_initial_state(
+                    case["prompt"], as_of_date="2018-10-17"
+                )
+                self.assertEqual(state["input_guard_status"], "rejected")
+                self.assertEqual(state["request_status"], "rejected")
+                self.assertEqual(state["execution_status"], "not_started")
 
 
 if __name__ == "__main__":

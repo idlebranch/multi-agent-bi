@@ -3,7 +3,12 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from src.tools.db_tools import execute_sql, validate_read_only_sql
+from src.tools.db_tools import (
+    execute_sql,
+    get_db_capacity_snapshot,
+    reset_db_capacity_metrics,
+    validate_read_only_sql,
+)
 
 
 class DatabaseToolsPolicyTests(unittest.TestCase):
@@ -40,10 +45,16 @@ class DatabaseToolsPolicyTests(unittest.TestCase):
             def acquire(self, *, timeout):
                 return False
 
+        reset_db_capacity_metrics()
         with patch("src.tools.postgres_db_tools._EXECUTION_SEMAPHORE", FullQueue()):
             queued = execute_sql("SELECT 1")
         self.assertFalse(queued["success"])
         self.assertEqual(queued["error_code"], "queue_timeout")
+        self.assertIn("capacity", queued["error"])
+        snapshot = get_db_capacity_snapshot()
+        self.assertEqual(snapshot["mechanism"], "bounded_concurrency_with_timed_wait")
+        self.assertEqual(snapshot["attempts"], 1)
+        self.assertEqual(snapshot["capacity_timeouts"], 1)
 
 
 if __name__ == "__main__":

@@ -65,6 +65,16 @@ _EFFECTIVE_QUEUE_TIMEOUT = min(
     float(policy_limit("database_queue_timeout_seconds", 10)),
 )
 _EXECUTION_SEMAPHORE = threading.BoundedSemaphore(_EFFECTIVE_DB_CONCURRENCY)
+_CAPACITY_LOCK = threading.Lock()
+_CAPACITY_METRICS: dict[str, int | float] = {
+    "attempts": 0,
+    "capacity_timeouts": 0,
+    "current_active": 0,
+    "current_waiting": 0,
+    "max_active": 0,
+    "max_waiting": 0,
+    "total_wait_ms": 0.0,
+}
 _HEALTH_CACHE_LOCK = threading.Lock()
 _HEALTH_CACHE: dict[str, Any] = {"key": None, "expires_at": 0.0, "payload": None}
 
@@ -297,7 +307,12 @@ def validate_sql(sql: str, database_url: str | None = None) -> dict[str, Any]:
         return {"valid": False, "error": str(exc)}
 
 
-def _execution_error(error: str, error_code: str) -> dict[str, Any]:
+def _execution_error(
+    error: str,
+    error_code: str,
+    *,
+    capacity_wait_ms: float = 0.0,
+) -> dict[str, Any]:
     return {
         "success": False,
         "data": None,
@@ -305,7 +320,43 @@ def _execution_error(error: str, error_code: str) -> dict[str, Any]:
         "error_code": error_code,
         "row_count": 0,
         "truncated": False,
+        "capacity_wait_ms": capacity_wait_ms,
     }
+
+
+def reset_db_capacity_metrics() -> None:
+    """Reset process-local capacity counters for a controlled reliability run."""
+    with _CAPACITY_LOCK:
+        _CAPACITY_METRICS.update(
+            {
+                "attempts": 0,
+                "capacity_timeouts": 0,
+                "current_active": 0,
+                "current_waiting": 0,
+                "max_active": 0,
+                "max_waiting": 0,
+                "total_wait_ms": 0.0,
+            }
+        )
+
+
+def get_db_capacity_snapshot() -> dict[str, int | float | str]:
+    """Return safe process-local bounded-concurrency observations."""
+    with _CAPACITY_LOCK:
+        payload = dict(_CAPACITY_METRICS)
+    attempts = int(payload["attempts"])
+    payload.update(
+        {
+            "mechanism": "bounded_concurrency_with_timed_wait",
+            "configured_concurrency": _EFFECTIVE_DB_CONCURRENCY,
+            "capacity_wait_timeout_seconds": _EFFECTIVE_QUEUE_TIMEOUT,
+            "average_wait_ms": round(float(payload["total_wait_ms"]) / attempts, 3)
+            if attempts
+            else 0.0,
+        }
+    )
+    payload["total_wait_ms"] = round(float(payload["total_wait_ms"]), 3)
+    return payload
 
 
 def execute_sql(
@@ -319,8 +370,33 @@ def execute_sql(
     safety = validate_read_only_sql(sql)
     if not safety["valid"]:
         return _execution_error(str(safety["error"]), "invalid_sql")
-    if not _EXECUTION_SEMAPHORE.acquire(timeout=_EFFECTIVE_QUEUE_TIMEOUT):
-        return _execution_error("database execution queue is full", "queue_timeout")
+    wait_started = time.perf_counter()
+    with _CAPACITY_LOCK:
+        _CAPACITY_METRICS["attempts"] += 1
+        _CAPACITY_METRICS["current_waiting"] += 1
+        _CAPACITY_METRICS["max_waiting"] = max(
+            int(_CAPACITY_METRICS["max_waiting"]),
+            int(_CAPACITY_METRICS["current_waiting"]),
+        )
+    acquired = _EXECUTION_SEMAPHORE.acquire(timeout=_EFFECTIVE_QUEUE_TIMEOUT)
+    capacity_wait_ms = round((time.perf_counter() - wait_started) * 1000, 3)
+    with _CAPACITY_LOCK:
+        _CAPACITY_METRICS["current_waiting"] -= 1
+        _CAPACITY_METRICS["total_wait_ms"] += capacity_wait_ms
+        if not acquired:
+            _CAPACITY_METRICS["capacity_timeouts"] += 1
+        else:
+            _CAPACITY_METRICS["current_active"] += 1
+            _CAPACITY_METRICS["max_active"] = max(
+                int(_CAPACITY_METRICS["max_active"]),
+                int(_CAPACITY_METRICS["current_active"]),
+            )
+    if not acquired:
+        return _execution_error(
+            "database execution capacity wait timed out",
+            "queue_timeout",
+            capacity_wait_ms=capacity_wait_ms,
+        )
     try:
         psycopg, _ = _load_psycopg()
         with readonly_connection(database_url, timeout_seconds=timeout_seconds) as conn:
@@ -335,20 +411,35 @@ def execute_sql(
             "error_code": None,
             "row_count": len(data),
             "truncated": truncated,
+            "capacity_wait_ms": capacity_wait_ms,
         }
     except Exception as exc:
         if "psycopg" not in locals():
-            return _execution_error(str(exc), "database_unavailable")
+            return _execution_error(
+                str(exc), "database_unavailable", capacity_wait_ms=capacity_wait_ms
+            )
         if isinstance(exc, psycopg.errors.QueryCanceled):
-            return _execution_error("query timed out", "query_timeout")
+            return _execution_error(
+                "query timed out", "query_timeout", capacity_wait_ms=capacity_wait_ms
+            )
         if isinstance(exc, (psycopg.OperationalError, psycopg.InterfaceError)):
-            return _execution_error(str(exc), "database_unavailable")
+            return _execution_error(
+                str(exc), "database_unavailable", capacity_wait_ms=capacity_wait_ms
+            )
         if isinstance(exc, psycopg.Error):
-            return _execution_error(str(exc), "database_error")
+            return _execution_error(
+                str(exc), "database_error", capacity_wait_ms=capacity_wait_ms
+            )
         if isinstance(exc, RuntimeError):
-            return _execution_error(str(exc), "database_unavailable")
-        return _execution_error(str(exc), "database_error")
+            return _execution_error(
+                str(exc), "database_unavailable", capacity_wait_ms=capacity_wait_ms
+            )
+        return _execution_error(
+            str(exc), "database_error", capacity_wait_ms=capacity_wait_ms
+        )
     finally:
+        with _CAPACITY_LOCK:
+            _CAPACITY_METRICS["current_active"] -= 1
         _EXECUTION_SEMAPHORE.release()
 
 
@@ -434,6 +525,23 @@ def _index_rows(conn: Any, table: str) -> list[dict[str, Any]]:
 def list_tables(database_url: str | None = None) -> list[str]:
     with readonly_connection(database_url) as conn:
         return _table_names(conn)
+
+
+def get_catalog_metrics(database_url: str | None = None) -> dict[str, int]:
+    """Measure available catalog size without rendering schema or sample data."""
+    with readonly_connection(database_url) as conn:
+        row = conn.execute(
+            "SELECT COUNT(DISTINCT c.table_name) AS table_count, "
+            "COUNT(*) AS column_count FROM information_schema.columns c "
+            "JOIN information_schema.tables t "
+            "ON t.table_schema = c.table_schema AND t.table_name = c.table_name "
+            "WHERE c.table_schema = current_schema() "
+            "AND t.table_type IN ('BASE TABLE', 'VIEW')"
+        ).fetchone()
+    return {
+        "available_table_count": int(row["table_count"]),
+        "available_column_count": int(row["column_count"]),
+    }
 
 
 def get_table_columns(table: str, database_url: str | None = None) -> list[str]:

@@ -12,18 +12,18 @@
   },
   "agents": {
     "schema_linking": {
-      "inputs": ["question", "iteration", "schema_status", "schema_refresh_count", "relevant_tables", "review_issues", "error", "error_history"],
-      "outputs": ["relevant_tables", "relevant_columns", "schema_status", "schema_reasoning", "schema_refresh_count", "terminal_reason", "error", "error_source", "error_history"],
-      "tools": ["get_db_overview", "list_tables", "get_table_columns", "llm"]
+      "inputs": ["question", "iteration", "schema_status", "schema_refresh_count", "relevant_tables", "review_issues", "error", "error_history", "schema_context_metrics", "llm_stage_calls"],
+      "outputs": ["relevant_tables", "relevant_columns", "schema_status", "schema_reasoning", "schema_refresh_count", "schema_context_metrics", "llm_stage_calls", "terminal_reason", "error", "error_source", "error_history"],
+      "tools": ["get_catalog_metrics", "get_db_overview", "list_tables", "get_table_columns", "llm"]
     },
     "sql_generation": {
-      "inputs": ["question", "as_of_date", "relevant_tables", "relevant_columns", "error", "error_history", "iteration", "sql_attempt_history"],
-      "outputs": ["sql", "sql_status", "sql_attempt_history", "review_status", "review_feedback", "review_issues", "sql_validated", "validation_status", "sql_result", "result_row_count", "result_truncated", "execution_status", "execution_error_code", "error", "error_source", "error_history"],
+      "inputs": ["question", "as_of_date", "relevant_tables", "relevant_columns", "error", "error_history", "iteration", "sql_attempt_history", "schema_context_metrics", "llm_stage_calls"],
+      "outputs": ["sql", "sql_status", "sql_attempt_history", "review_status", "review_feedback", "review_issues", "sql_validated", "validation_status", "sql_result", "result_row_count", "result_truncated", "execution_status", "execution_error_code", "db_capacity_wait_ms", "schema_context_metrics", "llm_stage_calls", "error", "error_source", "error_history"],
       "tools": ["get_db_schema", "llm"]
     },
     "sql_review": {
-      "inputs": ["question", "as_of_date", "relevant_tables", "sql", "iteration", "error_history"],
-      "outputs": ["review_status", "review_feedback", "review_issues", "error", "error_source", "error_history"],
+      "inputs": ["question", "as_of_date", "relevant_tables", "sql", "iteration", "error_history", "llm_stage_calls"],
+      "outputs": ["review_status", "review_feedback", "review_issues", "llm_stage_calls", "error", "error_source", "error_history"],
       "tools": ["get_db_schema", "llm"]
     },
     "sql_validation": {
@@ -33,12 +33,12 @@
     },
     "sql_execution": {
       "inputs": ["sql", "iteration", "error_history"],
-      "outputs": ["sql_result", "result_row_count", "result_truncated", "execution_status", "execution_error_code", "error", "error_source", "error_history"],
+      "outputs": ["sql_result", "result_row_count", "result_truncated", "execution_status", "execution_error_code", "db_capacity_wait_ms", "error", "error_source", "error_history"],
       "tools": ["execute_sql_read_only"]
     },
     "format_answer": {
-      "inputs": ["question", "as_of_date", "input_guard_status", "input_risk_flags", "request_status", "request_message", "clarification_options", "schema_status", "review_status", "validation_status", "execution_status", "execution_error_code", "sql_attempt_history", "sql_result", "result_row_count", "result_truncated", "error", "error_history", "terminal_reason"],
-      "outputs": ["final_answer", "response_status"],
+      "inputs": ["question", "as_of_date", "input_guard_status", "input_risk_flags", "request_status", "request_message", "clarification_options", "schema_status", "review_status", "validation_status", "execution_status", "execution_error_code", "sql_attempt_history", "sql_result", "result_row_count", "result_truncated", "error", "error_history", "terminal_reason", "llm_stage_calls"],
+      "outputs": ["final_answer", "response_status", "llm_stage_calls", "numerical_faithfulness"],
       "tools": ["llm"]
     }
   },

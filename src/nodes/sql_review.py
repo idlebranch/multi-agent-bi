@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from src.config import get_llm
 from src.contracts import ReviewIssue, SQLReviewResult
 from src.guardrails import untrusted_text_block
+from src.observability import invoke_llm_observed
 from src.policy import require_tool
 from src.semantic_rules import (
     get_metric_guidance,
@@ -81,12 +82,14 @@ def _parse_review_response(raw: str) -> SQLReviewResult:
 
 
 def sql_review_node(state: BIAgentState) -> dict:
+    llm_stage_calls = list(state.get("llm_stage_calls", []))
     sql = state.get("sql", "")
     if not sql:
         message = "reviewer received empty SQL"
         return {
             "review_status": "failed",
             "review_feedback": message,
+            "llm_stage_calls": llm_stage_calls,
             **record_error(state, "sql_review", message),
         }
 
@@ -115,11 +118,15 @@ SQL candidate:
                 if attempt
                 else ""
             )
-            response = get_llm(0.0).invoke(
-                [
-                    SystemMessage(content=SYSTEM_PROMPT),
-                    HumanMessage(content=prompt + retry_note),
-                ]
+            response = invoke_llm_observed(
+                llm_stage_calls,
+                "sql_review",
+                lambda: get_llm(0.0).invoke(
+                    [
+                        SystemMessage(content=SYSTEM_PROMPT),
+                        HumanMessage(content=prompt + retry_note),
+                    ]
+                ),
             )
             try:
                 review = _parse_review_response(str(response.content))
@@ -147,6 +154,7 @@ SQL candidate:
                 "review_status": "succeeded",
                 "review_feedback": feedback,
                 "review_issues": issues,
+                "llm_stage_calls": llm_stage_calls,
                 "error": "",
                 "error_source": "",
             }
@@ -158,6 +166,7 @@ SQL candidate:
             "review_status": "failed",
             "review_feedback": message,
             "review_issues": issues,
+            "llm_stage_calls": llm_stage_calls,
             **record_error(state, "sql_review", message),
         }
     except (ValidationError, ValueError, RuntimeError, OSError) as exc:
@@ -166,6 +175,7 @@ SQL candidate:
             "review_status": "failed",
             "review_feedback": message,
             "review_issues": [],
+            "llm_stage_calls": llm_stage_calls,
             **record_error(state, "sql_review", message),
         }
     except Exception as exc:
@@ -174,5 +184,6 @@ SQL candidate:
             "review_status": "failed",
             "review_feedback": message,
             "review_issues": [],
+            "llm_stage_calls": llm_stage_calls,
             **record_error(state, "sql_review", message),
         }

@@ -26,7 +26,15 @@ _ENTITY_ALIASES = {
 
 def _normalize_text(text: str) -> str:
     value = unicodedata.normalize("NFKC", text).casefold()
+    contextual_years = set(re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", value))
     value = re.sub(r"(\d{4})\s*年\s*(\d{1,2})\s*月", lambda m: f"{m.group(1)}-{int(m.group(2)):02d}", value)
+    if len(contextual_years) == 1:
+        year = next(iter(contextual_years))
+        value = re.sub(
+            r"(?<![\d年-])([1-9]|1[0-2])\s*月",
+            lambda match: f"{year}-{int(match.group(1)):02d}",
+            value,
+        )
     value = re.sub(r"(\d{4})\s*年?\s*q\s*([1-4])", r"\1-q\2", value)
     value = re.sub(r"(\d{4})\s*年?\s*第?\s*([1-4])\s*季度", r"\1-q\2", value)
     return value

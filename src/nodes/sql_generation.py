@@ -7,6 +7,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from src.config import get_llm
 from src.contracts import SQLAttempt
 from src.guardrails import untrusted_text_block
+from src.observability import invoke_llm_observed
 from src.policy import require_tool
 from src.semantic_rules import get_metric_guidance
 from src.state import BIAgentState, record_error
@@ -46,6 +47,8 @@ def _clean_sql_response(raw: str) -> str:
 
 
 def sql_generation_node(state: BIAgentState) -> dict:
+    llm_stage_calls = list(state.get("llm_stage_calls", []))
+    schema_context_metrics = dict(state.get("schema_context_metrics", {}))
     relevant_tables = state.get("relevant_tables", [])
     if not relevant_tables:
         message = "cannot generate SQL without selected tables"
@@ -61,6 +64,9 @@ def sql_generation_node(state: BIAgentState) -> dict:
             table_names=relevant_tables,
             include_related=True,
             include_samples=False,
+        )
+        schema_context_metrics["selected_schema_context_chars"] = min(
+            len(schema), 50_000
         )
         as_of_date = state.get("as_of_date", "")
         previous_error = state.get("error", "")
@@ -92,8 +98,12 @@ AND < date_trunc('month', TIMESTAMP '{as_of_date}') + INTERVAL '1 month'
 {previous_error_text}
 """
         require_tool("sql_generation", "llm")
-        response = get_llm(0.0).invoke(
-            [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=prompt)]
+        response = invoke_llm_observed(
+            llm_stage_calls,
+            "sql_generation",
+            lambda: get_llm(0.0).invoke(
+                [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=prompt)]
+            ),
         )
         sql = _clean_sql_response(str(response.content))
         if not sql:
@@ -123,6 +133,9 @@ AND < date_trunc('month', TIMESTAMP '{as_of_date}') + INTERVAL '1 month'
             "result_truncated": False,
             "execution_status": "not_started",
             "execution_error_code": "",
+            "db_capacity_wait_ms": 0.0,
+            "schema_context_metrics": schema_context_metrics,
+            "llm_stage_calls": llm_stage_calls,
             "error": "",
             "error_source": "",
         }
@@ -135,5 +148,8 @@ AND < date_trunc('month', TIMESTAMP '{as_of_date}') + INTERVAL '1 month'
             "validation_status": "not_started",
             "execution_status": "not_started",
             "execution_error_code": "",
+            "db_capacity_wait_ms": 0.0,
+            "schema_context_metrics": schema_context_metrics,
+            "llm_stage_calls": llm_stage_calls,
             **record_error(state, "sql_generation", message),
         }

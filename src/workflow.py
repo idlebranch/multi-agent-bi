@@ -6,6 +6,7 @@ from collections.abc import Callable
 from time import perf_counter
 from typing import Any
 
+from src.observability import log_run_summary
 from src.policy import (
     PolicyViolation,
     node_output_decision,
@@ -128,4 +129,5 @@ def run_graph_once(graph: Any, initial_state: BIAgentState) -> tuple[BIAgentStat
             trace.append({"node": node_name, **trace_output})
 
     final_state["total_duration_ms"] = round((perf_counter() - started) * 1000, 3)
+    log_run_summary(final_state)
     return final_state, trace
