@@ -79,7 +79,7 @@ _GUIDANCE: dict[MetricName, str] = {
     ),
     "delivered_customer_gmv_percentile": (
         "Use customer_order_summary, keep delivered_order_count >= 1, and calculate "
-        "the percentile from delivered_gmv. In SQLite use CUME_DIST or an explicitly "
+        "the percentile from delivered_gmv. In PostgreSQL use CUME_DIST or an explicitly "
         "defined rank; NTILE(100) is not the 99th-percentile threshold."
     ),
 }

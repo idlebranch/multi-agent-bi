@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,7 +14,11 @@ from src.nodes.sql_generation import sql_generation_node
 from src.nodes.sql_review import sql_review_node
 from src.nodes.sql_validation import sql_validation_node
 from src.state import create_initial_state
-from src.tools.db_tools import execute_sql, get_db_overview, validate_sql
+from benchmarks.sqlite_reference import (
+    execute_sqlite,
+    get_sqlite_db_overview,
+    validate_sqlite,
+)
 from src.workflow import run_graph_once
 
 
@@ -32,8 +37,20 @@ class FakeLLM:
 
 @unittest.skipUnless(OLIST_DB.is_file(), "local Olist database has not been built")
 class OlistDatasetTests(unittest.TestCase):
+    def _use_test_database(self) -> None:
+        previous = os.environ.get("BI_DATABASE_URL")
+        os.environ["BI_DATABASE_URL"] = os.environ["BI_TEST_DATABASE_URL"]
+
+        def restore() -> None:
+            if previous is None:
+                os.environ.pop("BI_DATABASE_URL", None)
+            else:
+                os.environ["BI_DATABASE_URL"] = previous
+
+        self.addCleanup(restore)
+
     def test_catalog_exposes_relations_views_and_metrics(self) -> None:
-        catalog = get_db_overview(OLIST_DB)
+        catalog = get_sqlite_db_overview(OLIST_DB)
         self.assertIn("order_items", catalog)
         self.assertIn("order_financials", catalog)
         self.assertIn("category_sales_summary", catalog)
@@ -47,9 +64,11 @@ class OlistDatasetTests(unittest.TestCase):
         cases = json.loads(GOLDEN_QUERIES.read_text(encoding="utf-8"))
         for case in cases:
             with self.subTest(name=case["name"]):
-                validation = validate_sql(case["sql"], OLIST_DB)
+                validation = validate_sqlite(case["sql"], OLIST_DB)
                 self.assertTrue(validation["valid"], validation["error"])
-                result = execute_sql(case["sql"], OLIST_DB, max_rows=500, timeout_seconds=10)
+                result = execute_sqlite(
+                    case["sql"], OLIST_DB, max_rows=500, timeout_seconds=10
+                )
                 self.assertTrue(result["success"], result["error"])
                 self.assertFalse(result["truncated"])
                 self.assertGreaterEqual(result["row_count"], case.get("min_rows", 1))
@@ -57,14 +76,21 @@ class OlistDatasetTests(unittest.TestCase):
                 if expected_first_row is not None:
                     self.assertEqual(result["data"][0], expected_first_row)
 
+    @unittest.skipUnless(
+        os.getenv("BI_TEST_DATABASE_URL"), "PostgreSQL integration database is unavailable"
+    )
     def test_agent_stages_reach_a_real_olist_result(self) -> None:
+        self._use_test_database()
         state = create_initial_state("已签收订单的平均客单价是多少？", as_of_date="2018-10-17")
-        with patch(
-            "src.nodes.schema_linking.get_llm",
-            return_value=FakeLLM(
-                '{"tables":["order_financials"],'
-                '"columns":{"order_financials":["status","item_value"]},'
-                '"reasoning":"使用无连接放大的订单财务视图"}'
+        with (
+            patch.dict(os.environ, {"BI_DATABASE_URL": os.environ["BI_TEST_DATABASE_URL"]}),
+            patch(
+                "src.nodes.schema_linking.get_llm",
+                return_value=FakeLLM(
+                    '{"tables":["order_financials"],'
+                    '"columns":{"order_financials":["status","item_value"]},'
+                    '"reasoning":"使用无连接放大的订单财务视图"}'
+                ),
             ),
         ):
             state.update(schema_linking_node(state))
@@ -96,15 +122,20 @@ class OlistDatasetTests(unittest.TestCase):
         self.assertEqual(state["review_status"], "succeeded")
         self.assertEqual(state["validation_status"], "succeeded")
         self.assertEqual(state["execution_status"], "succeeded")
-        self.assertEqual(state["sql_result"], [{"average_order_value": 137.04}])
+        self.assertEqual(str(state["sql_result"][0]["average_order_value"]), "137.04")
 
+    @unittest.skipUnless(
+        os.getenv("BI_TEST_DATABASE_URL"), "PostgreSQL integration database is unavailable"
+    )
     def test_full_secured_graph_records_every_handoff(self) -> None:
+        self._use_test_database()
         state = create_initial_state("已签收订单的平均客单价是多少？", as_of_date="2018-10-17")
         sql = (
             "SELECT ROUND(SUM(item_value) / COUNT(*), 2) AS average_order_value "
             "FROM order_financials WHERE status = 'delivered'"
         )
         with (
+            patch.dict(os.environ, {"BI_DATABASE_URL": os.environ["BI_TEST_DATABASE_URL"]}),
             patch(
                 "src.nodes.schema_linking.get_llm",
                 return_value=FakeLLM(

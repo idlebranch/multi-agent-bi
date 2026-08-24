@@ -327,7 +327,7 @@ class LauncherWindow:
         ttk.Label(frame, text="Multi-Agent BI", style="Title.TLabel").pack(anchor="w")
         ttk.Label(
             frame,
-            text="Production · LangGraph · Read-only SQLite",
+            text="Production · LangGraph · Read-only PostgreSQL",
             style="Subtitle.TLabel",
         ).pack(anchor="w", pady=(2, 18))
 

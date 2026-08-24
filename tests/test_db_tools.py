@@ -7,14 +7,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.tools.db_tools import (
-    execute_sql,
-    get_database_health_summary,
-    get_db_overview,
-    get_db_schema,
-    validate_read_only_sql,
-    validate_sql,
+from benchmarks.sqlite_reference import (
+    execute_sqlite,
+    get_sqlite_db_overview,
+    get_sqlite_db_schema,
+    sqlite_database_fingerprint,
+    validate_sqlite,
 )
+from src.tools.db_tools import execute_sql, validate_read_only_sql
 
 
 class DatabaseToolsTests(unittest.TestCase):
@@ -44,14 +44,14 @@ class DatabaseToolsTests(unittest.TestCase):
             conn.commit()
         finally:
             conn.close()
-        self.previous_path = os.environ.get("BI_DB_PATH")
-        os.environ["BI_DB_PATH"] = str(self.db_path)
+        self.previous_path = os.environ.get("BI_SQLITE_REFERENCE_PATH")
+        os.environ["BI_SQLITE_REFERENCE_PATH"] = str(self.db_path)
 
     def tearDown(self) -> None:
         if self.previous_path is None:
-            os.environ.pop("BI_DB_PATH", None)
+            os.environ.pop("BI_SQLITE_REFERENCE_PATH", None)
         else:
-            os.environ["BI_DB_PATH"] = self.previous_path
+            os.environ["BI_SQLITE_REFERENCE_PATH"] = self.previous_path
         self.db_path.unlink(missing_ok=True)
 
     def test_allows_select_and_cte(self) -> None:
@@ -73,18 +73,18 @@ class DatabaseToolsTests(unittest.TestCase):
                 self.assertFalse(validate_read_only_sql(sql)["valid"])
 
     def test_database_validation_checks_real_columns(self) -> None:
-        self.assertTrue(validate_sql("SELECT amount FROM orders")["valid"])
-        self.assertFalse(validate_sql("SELECT ghost FROM orders")["valid"])
+        self.assertTrue(validate_sqlite("SELECT amount FROM orders")["valid"])
+        self.assertFalse(validate_sqlite("SELECT ghost FROM orders")["valid"])
 
     def test_execution_distinguishes_empty_results(self) -> None:
-        result = execute_sql("SELECT * FROM orders WHERE id < 0")
+        result = execute_sqlite("SELECT * FROM orders WHERE id < 0")
         self.assertTrue(result["success"])
         self.assertEqual(result["row_count"], 0)
         self.assertEqual(result["data"], [])
         self.assertFalse(result["truncated"])
 
     def test_execution_caps_materialized_rows(self) -> None:
-        result = execute_sql("SELECT * FROM orders ORDER BY id", max_rows=2)
+        result = execute_sqlite("SELECT * FROM orders ORDER BY id", max_rows=2)
         self.assertTrue(result["success"])
         self.assertEqual(result["row_count"], 2)
         self.assertTrue(result["truncated"])
@@ -98,29 +98,27 @@ class DatabaseToolsTests(unittest.TestCase):
             def acquire(self, *, timeout):
                 return False
 
-        with patch("src.tools.db_tools._EXECUTION_SEMAPHORE", FullQueue()):
+        with patch("src.tools.postgres_db_tools._EXECUTION_SEMAPHORE", FullQueue()):
             queued = execute_sql("SELECT 1")
         self.assertFalse(queued["success"])
         self.assertEqual(queued["error_code"], "queue_timeout")
 
     def test_catalog_exposes_foreign_keys_and_selected_detail(self) -> None:
-        overview = get_db_overview()
+        overview = get_sqlite_db_overview()
         self.assertIn("orders", overview)
         self.assertIn("customer_id -> customers.id", overview)
 
-        detail = get_db_schema(table_names=["orders"], include_related=True)
+        detail = get_sqlite_db_schema(table_names=["orders"], include_related=True)
         self.assertIn("Table: orders", detail)
         self.assertIn("Table: customers", detail)
         self.assertIn("orders.customer_id -> customers.id", detail)
 
     def test_health_summary_is_read_only_and_cached(self) -> None:
-        first = get_database_health_summary(force_refresh=True)
-        second = get_database_health_summary()
-        self.assertEqual(first["integrity_check"], "ok")
-        self.assertTrue(first["read_only"])
-        self.assertEqual(first["foreign_key_violations"], 0)
-        self.assertEqual(first["table_counts"]["orders"], 3)
-        self.assertEqual(first, second)
+        health = sqlite_database_fingerprint(self.db_path, tables=("orders",))
+        self.assertEqual(health["integrity_check"], "ok")
+        self.assertTrue(health["read_only_connection"])
+        self.assertEqual(health["foreign_key_violations"], 0)
+        self.assertEqual(health["row_counts"]["orders"], 3)
 
 
 if __name__ == "__main__":

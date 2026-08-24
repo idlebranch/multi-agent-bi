@@ -145,7 +145,7 @@ def _timeline_summary(node: str, item: dict, final_state: BIAgentState) -> str:
         return f"发现 {len(issues)} 个问题，将按有限预算自动修复"
     if node == "sql_validation":
         return (
-            "单语句只读检查与 SQLite EXPLAIN 通过"
+            "单语句只读检查与 PostgreSQL EXPLAIN 通过"
             if item.get("validation_status") == "succeeded"
             else "SQL 未通过只读安全校验"
         )
@@ -394,11 +394,11 @@ def health(refresh: bool = Query(default=False)) -> dict[str, Any]:
         )
         database_ready = diagnostics.get("status") == "ready"
         status = "ok" if database_ready else "degraded"
-    except (FileNotFoundError, OSError, RuntimeError):
+    except (OSError, RuntimeError):
         LOGGER.exception("database health check failed")
         diagnostics = {
             "status": "unavailable",
-            "message": "数据库暂时不可访问，请检查本地数据文件。",
+            "message": "PostgreSQL 暂时不可访问，请检查数据库连接配置。",
             "read_only": True,
         }
         database_ready = False

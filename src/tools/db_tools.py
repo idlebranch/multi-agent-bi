@@ -1,4 +1,4 @@
-"""Read-only, bounded SQLite access and scalable schema catalog helpers."""
+"""Production database boundary with SQLite retained only for migration parity."""
 
 from __future__ import annotations
 
@@ -566,3 +566,20 @@ def get_db_schema(
                 parts.append(f"- {name}: {definition}")
 
         return "\n".join(parts)
+
+
+# Production database boundary.  The SQLite implementation above remains only
+# during the parity/retirement window; Agent nodes resolve these PostgreSQL
+# callables and never open SQLite directly.
+from src.tools import postgres_db_tools as _postgres  # noqa: E402
+
+readonly_connection = _postgres.readonly_connection  # noqa: F811
+get_database_health_summary = _postgres.get_database_health_summary  # noqa: F811
+validate_read_only_sql = _postgres.validate_read_only_sql  # noqa: F811
+validate_sql = _postgres.validate_sql  # noqa: F811
+execute_sql = _postgres.execute_sql  # noqa: F811
+list_tables = _postgres.list_tables  # noqa: F811
+get_table_columns = _postgres.get_table_columns  # noqa: F811
+get_db_overview = _postgres.get_db_overview  # noqa: F811
+get_db_schema = _postgres.get_db_schema  # noqa: F811
+get_database_label = _postgres.get_database_label

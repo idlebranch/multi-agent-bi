@@ -67,6 +67,16 @@ LLM_MAX_RETRIES = int(os.getenv("BI_LLM_MAX_RETRIES", "2"))
 TRUST_ENV_PROXY = _env_bool("BI_TRUST_ENV_PROXY", False)
 
 
+def get_database_url(override: str | None = None) -> str:
+    """Return the PostgreSQL DSN without embedding credentials in source code."""
+    value = (override or os.getenv("BI_DATABASE_URL", "")).strip()
+    if not value:
+        raise RuntimeError("BI_DATABASE_URL is not configured")
+    if not value.startswith(("postgresql://", "postgres://")):
+        raise RuntimeError("BI_DATABASE_URL must be a PostgreSQL connection URL")
+    return value
+
+
 def get_data_as_of_date() -> str:
     """Return the business clock used for relative-date questions."""
     configured = os.getenv("BI_DATA_AS_OF_DATE")
