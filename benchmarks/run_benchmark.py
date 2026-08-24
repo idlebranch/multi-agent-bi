@@ -550,6 +550,10 @@ def summarize(
         int(item.get("observed_llm_stage_calls", 0)) for item in all_items
     )
     query_items = [item for item in business if query(item)]
+    query_llm_calls = sum(
+        int(item.get("observed_llm_stage_calls", 0)) for item in query_items
+    )
+    _, query_token_usage = _aggregate_token_usage(query_items)
     if token_usage:
         token_usage["average_total_tokens_per_business_case"] = (
             round(token_usage["total_tokens"] / len(business), 3)
@@ -557,9 +561,12 @@ def summarize(
             else 0.0
         )
         token_usage["average_total_tokens_per_query_case"] = (
-            round(token_usage["total_tokens"] / len(query_items), 3)
-            if query_items
+            round(query_token_usage["total_tokens"] / len(query_items), 3)
+            if query_items and query_token_usage
             else 0.0
+        )
+        token_usage["query_case_total_tokens"] = (
+            query_token_usage["total_tokens"] if query_token_usage else 0
         )
     sql_repair_llm_calls = sum(
         int(item.get("sql_repair_llm_calls", 0)) for item in business
@@ -594,6 +601,11 @@ def summarize(
                 if business
                 else None
             ),
+            "average_llm_stage_calls_per_query_case": (
+                round(query_llm_calls / len(query_items), 4)
+                if query_items
+                else None
+            ),
             "llm_stage_breakdown": dict(sorted(stage_breakdown.items())),
             "sql_repair_llm_calls": sql_repair_llm_calls,
             "llm_call_summary": {
@@ -604,6 +616,7 @@ def summarize(
                 "repair_calls_subset_of_sql_writer": sql_repair_llm_calls,
                 "answer_calls": stage_breakdown.get("format_answer", 0),
                 "total_stage_calls": observed_llm_calls,
+                "query_case_stage_calls": query_llm_calls,
             },
             "schema_context": _summarize_schema_context(business),
             "schema_context_query_cases": _summarize_schema_context(query_items),
@@ -705,6 +718,7 @@ def markdown_summary(report: dict[str, Any]) -> str:
             f"- Actual workflow LLM-stage invoke calls: {metrics.get('observed_llm_stage_calls')}",
             f"- Average LLM-stage calls per all request: {metrics.get('average_llm_stage_calls_per_request')}",
             f"- Average LLM-stage calls per business case: {metrics.get('average_llm_stage_calls_per_business_case')}",
+            f"- Average LLM-stage calls per query case: {metrics.get('average_llm_stage_calls_per_query_case')}",
             f"- LLM-stage breakdown: {stage_breakdown}",
             "- Planner/router LLM calls: 0 (routing is deterministic and policy-coded)",
             f"- SQL-repair LLM calls: {metrics.get('sql_repair_llm_calls')}",

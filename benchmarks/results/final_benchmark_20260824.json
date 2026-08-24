@@ -291,11 +291,13 @@
       "reported_calls": 344,
       "unreported_calls": 0,
       "average_total_tokens_per_business_case": 4235.789,
-      "average_total_tokens_per_query_case": 4484.953
+      "average_total_tokens_per_query_case": 4342.035,
+      "query_case_total_tokens": 369073
     },
     "observed_llm_stage_calls": 344,
     "average_llm_stage_calls_per_request": 2.9913,
     "average_llm_stage_calls_per_business_case": 3.8222,
+    "average_llm_stage_calls_per_query_case": 3.9412,
     "llm_stage_breakdown": {
       "format_answer": 78,
       "schema_linking": 57,
@@ -310,7 +312,8 @@
       "review_calls": 105,
       "repair_calls_subset_of_sql_writer": 18,
       "answer_calls": 78,
-      "total_stage_calls": 344
+      "total_stage_calls": 344,
+      "query_case_stage_calls": 335
     },
     "schema_context": {
       "available_table_count": {

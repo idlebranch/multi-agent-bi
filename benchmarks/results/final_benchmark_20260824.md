@@ -53,13 +53,14 @@
 - Actual workflow LLM-stage invoke calls: 344
 - Average LLM-stage calls per all request: 2.9913
 - Average LLM-stage calls per business case: 3.8222
+- Average LLM-stage calls per query case: 3.9412
 - LLM-stage breakdown: format_answer=78, schema_linking=57, sql_generation=104, sql_review=105
 - Planner/router LLM calls: 0 (routing is deterministic and policy-coded)
 - SQL-repair LLM calls: 18
 - Exact provider HTTP request count: unavailable; SDK retries are not exposed as HTTP counts
 - Token usage: provider-reported prompt=350464, completion=30757, total=381221 (available)
 - Average total tokens per business case: 4235.789
-- Average total tokens per query case: 4484.953
+- Average total tokens per query case: 4342.035
 
 ## Schema context measurements
 

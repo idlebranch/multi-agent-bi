@@ -124,7 +124,8 @@ DeepSeek 在最终运行的 344 次实际 workflow stage invoke 中全部返回 
 - prompt tokens：350,464
 - completion tokens：30,757
 - total tokens：381,221
-- average total tokens/query case：4,484.953
+- query-only tokens：369,073；average total tokens/query case：4,342.035
+- average LLM stage calls/query case：3.9412 (335/85)
 - stage calls：Schema Linking 57、SQL Writer 104、Review 105、Answer 78；18 次 repair 是 SQL Writer calls 的子集
 - Planner/Router LLM calls：0；路由为 deterministic
 
