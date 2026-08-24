@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from time import perf_counter
 from typing import Literal, TypedDict
 from uuid import uuid4
 
@@ -11,6 +12,21 @@ from src.guardrails import normalize_untrusted_text, redact_secrets, screen_user
 
 StageStatus = Literal["not_started", "succeeded", "failed", "no_match"]
 ExecutionStatus = Literal["not_started", "succeeded", "failed"]
+RequestStatus = Literal[
+    "ready",
+    "clarification_required",
+    "out_of_scope",
+    "rejected",
+]
+ResponseStatus = Literal[
+    "pending",
+    "success",
+    "clarification",
+    "out_of_scope",
+    "rejected",
+    "no_data",
+    "failed",
+]
 
 
 class BIAgentState(TypedDict, total=False):
@@ -18,8 +34,11 @@ class BIAgentState(TypedDict, total=False):
     run_id: str
     question: str
     as_of_date: str
-    input_guard_status: Literal["passed", "blocked"]
+    input_guard_status: Literal["passed", "rejected"]
     input_risk_flags: list[str]
+    request_status: RequestStatus
+    request_message: str
+    clarification_options: list[dict]
 
     # Catalog / schema selection
     relevant_tables: list[str]
@@ -61,9 +80,13 @@ class BIAgentState(TypedDict, total=False):
     handoff_history: list[dict]
     policy_decisions: list[dict]
     visit_count: dict[str, int]
+    node_timings: list[dict]
+    last_node_timing: dict
+    total_duration_ms: float
 
     # Response
     final_answer: str
+    response_status: ResponseStatus
 
 
 def create_initial_state(
@@ -73,13 +96,18 @@ def create_initial_state(
     as_of_date: str | None = None,
 ) -> BIAgentState:
     """Build one canonical initial state for API, CLI, and tests."""
+    guard_started = perf_counter()
     screening = screen_user_question(question)
+    guard_duration_ms = round((perf_counter() - guard_started) * 1000, 3)
     return {
         "run_id": uuid4().hex,
         "question": screening["question"],
         "as_of_date": as_of_date or get_data_as_of_date(),
         "input_guard_status": screening["status"],
         "input_risk_flags": screening["risk_flags"],
+        "request_status": screening["request_status"],
+        "request_message": screening["request_message"],
+        "clarification_options": screening["clarification_options"],
         "relevant_tables": [],
         "relevant_columns": {},
         "schema_status": "not_started",
@@ -110,7 +138,18 @@ def create_initial_state(
         "handoff_history": [],
         "policy_decisions": [],
         "visit_count": {},
+        "node_timings": [
+            {
+                "node": "input_guard",
+                "attempt": 1,
+                "duration_ms": guard_duration_ms,
+                "status": screening["status"],
+            }
+        ],
+        "last_node_timing": {},
+        "total_duration_ms": 0.0,
         "final_answer": "",
+        "response_status": "pending",
     }
 
 

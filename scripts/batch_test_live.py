@@ -16,8 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL  # noqa: E402
-from src.graph import app as stable_graph  # noqa: E402
-from src.graph_v2 import app_v2 as experimental_graph  # noqa: E402
+from src.graph import app as production_graph  # noqa: E402
 from src.guardrails import sanitize_public_value, sanitize_result_rows  # noqa: E402
 from src.state import create_initial_state  # noqa: E402
 from src.tools.db_tools import get_db_path  # noqa: E402
@@ -62,15 +61,14 @@ def result_matches_expected(
     return any(row_contains_expected_values(row, expected) for row in rows)
 
 
-def run_case(case: dict[str, Any], *, version: str, max_iterations: int) -> dict[str, Any]:
-    graph = experimental_graph if version == "v2" else stable_graph
+def run_case(case: dict[str, Any], *, max_iterations: int) -> dict[str, Any]:
     started = time.perf_counter()
     state = create_initial_state(
         str(case["question"]),
         max_iterations=max_iterations,
         as_of_date="2018-10-17",
     )
-    final_state, trace = run_graph_once(graph, state)
+    final_state, trace = run_graph_once(production_graph, state)
     elapsed = time.perf_counter() - started
 
     rows = final_state.get("sql_result", [])
@@ -121,7 +119,6 @@ def run_case(case: dict[str, Any], *, version: str, max_iterations: int) -> dict
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", choices=("v1", "v2"), default="v1")
     parser.add_argument("--limit", type=int, default=0, help="0 means all cases")
     parser.add_argument("--names", nargs="*", default=[], help="run only named cases")
     parser.add_argument("--max-iterations", type=int, default=12)
@@ -149,7 +146,6 @@ def main() -> int:
         try:
             result = run_case(
                 case,
-                version=args.version,
                 max_iterations=args.max_iterations,
             )
         except Exception as exc:
@@ -173,7 +169,7 @@ def main() -> int:
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "mode": "live_llm",
         "model": DEEPSEEK_MODEL,
-        "workflow_version": args.version,
+        "workflow_version": "Production",
         "database": get_db_path().name,
         "total": len(results),
         "passed": passed_count,

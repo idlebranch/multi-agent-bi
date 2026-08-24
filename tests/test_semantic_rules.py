@@ -24,11 +24,21 @@ class SemanticRuleTests(unittest.TestCase):
             "各支付方式的支付金额是多少？": "payment_type_summary",
             "下过两次及以上订单的消费者有多少？": "customer_order_summary",
             "已签收 GMV 最高的五个卖家州是什么？": "product_sales",
+            "分析最近三个月的销售趋势。": "product_sales",
         }
         for question, table in cases.items():
             with self.subTest(question=question):
                 self.assertIsNotNone(identify_metric(question))
                 self.assertEqual(preferred_tables_for_question(question), [table])
+
+    def test_recent_sales_trend_requires_delivered_scope(self) -> None:
+        issues = review_sql_semantics(
+            "分析最近三个月的销售趋势。",
+            "SELECT strftime('%Y-%m', purchase_timestamp) AS month, "
+            "SUM(price) AS gmv FROM product_sales "
+            "WHERE purchase_timestamp >= '2018-08-01' GROUP BY 1",
+        )
+        self.assertIn("missing_status_filter", [issue.code for issue in issues])
 
     def test_rejects_category_translation_join_against_english_view(self) -> None:
         issues = review_sql_semantics(

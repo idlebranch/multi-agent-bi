@@ -1,0 +1,883 @@
+{
+  "metadata": {
+    "timestamp_utc": "2026-08-24T06:57:46.293268+00:00",
+    "commit_sha": "13fe742b1054c47ccf314d98742864a53b3a2e04",
+    "benchmark_version": "1.0.0",
+    "mode": "deterministic_gold_validation",
+    "transport": "in_process_langgraph",
+    "model": "not_invoked",
+    "provider_base_url": "api.deepseek.com",
+    "temperatures": {
+      "sql_generation": 0.0,
+      "sql_review": 0.0,
+      "answer": 0.2
+    },
+    "as_of_date": "2018-10-17",
+    "python": "3.12.11",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "environment": "local"
+  },
+  "case_counts": {
+    "business": 90,
+    "safety": 0
+  },
+  "elapsed_seconds": 46.127,
+  "database_before": {
+    "path": "C:\\Users\\10475\\AI_PROJECT\\multi_agent_bi\\data\\olist.sqlite",
+    "bytes": 242651136,
+    "sha256": "7e7bcc7503ec63cb4ae92597d5d96f0e2ad9eb718805889d43958e2697b064dc",
+    "integrity_check": "ok",
+    "foreign_key_violations": 0,
+    "row_counts": {
+      "orders": 99441,
+      "order_items": 112650,
+      "payments": 103886,
+      "reviews": 99224,
+      "customers": 99441,
+      "products": 32951,
+      "sellers": 3095,
+      "order_financials": 99441,
+      "order_delivery_metrics": 96478,
+      "product_sales": 112650,
+      "category_sales_summary": 74,
+      "delivery_kpis": 1,
+      "payment_type_summary": 5,
+      "customer_order_summary": 96096
+    },
+    "read_only_connection": true
+  },
+  "database_after": {
+    "path": "C:\\Users\\10475\\AI_PROJECT\\multi_agent_bi\\data\\olist.sqlite",
+    "bytes": 242651136,
+    "sha256": "7e7bcc7503ec63cb4ae92597d5d96f0e2ad9eb718805889d43958e2697b064dc",
+    "integrity_check": "ok",
+    "foreign_key_violations": 0,
+    "row_counts": {
+      "orders": 99441,
+      "order_items": 112650,
+      "payments": 103886,
+      "reviews": 99224,
+      "customers": 99441,
+      "products": 32951,
+      "sellers": 3095,
+      "order_financials": 99441,
+      "order_delivery_metrics": 96478,
+      "product_sales": 112650,
+      "category_sales_summary": 74,
+      "delivery_kpis": 1,
+      "payment_type_summary": 5,
+      "customer_order_summary": 96096
+    },
+    "read_only_connection": true
+  },
+  "database_unchanged": true,
+  "metrics": {},
+  "business_results": [
+    {
+      "case_id": "B001",
+      "category": "single_table_aggregation",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 8,
+      "error": null,
+      "latency_seconds": 0.026
+    },
+    {
+      "case_id": "B002",
+      "category": "single_table_aggregation",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.008
+    },
+    {
+      "case_id": "B003",
+      "category": "single_table_aggregation",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.005
+    },
+    {
+      "case_id": "B004",
+      "category": "single_table_aggregation",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.001
+    },
+    {
+      "case_id": "B005",
+      "category": "single_table_aggregation",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.003
+    },
+    {
+      "case_id": "B006",
+      "category": "single_table_aggregation",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.005
+    },
+    {
+      "case_id": "B007",
+      "category": "single_table_aggregation",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.007
+    },
+    {
+      "case_id": "B008",
+      "category": "single_table_aggregation",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.004
+    },
+    {
+      "case_id": "B009",
+      "category": "single_table_aggregation",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.01
+    },
+    {
+      "case_id": "B010",
+      "category": "single_table_aggregation",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.006
+    },
+    {
+      "case_id": "B011",
+      "category": "single_table_aggregation",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.005
+    },
+    {
+      "case_id": "B012",
+      "category": "filtering_sorting",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.006
+    },
+    {
+      "case_id": "B013",
+      "category": "filtering_sorting",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.002
+    },
+    {
+      "case_id": "B014",
+      "category": "filtering_sorting",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.024
+    },
+    {
+      "case_id": "B015",
+      "category": "filtering_sorting",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.025
+    },
+    {
+      "case_id": "B016",
+      "category": "filtering_sorting",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 3,
+      "error": null,
+      "latency_seconds": 0.028
+    },
+    {
+      "case_id": "B017",
+      "category": "filtering_sorting",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.019
+    },
+    {
+      "case_id": "B018",
+      "category": "filtering_sorting",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.002
+    },
+    {
+      "case_id": "B019",
+      "category": "filtering_sorting",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.006
+    },
+    {
+      "case_id": "B020",
+      "category": "filtering_sorting",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.005
+    },
+    {
+      "case_id": "B021",
+      "category": "filtering_sorting",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.029
+    },
+    {
+      "case_id": "B022",
+      "category": "multi_table_join",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.602
+    },
+    {
+      "case_id": "B023",
+      "category": "multi_table_join",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 8,
+      "error": null,
+      "latency_seconds": 1.062
+    },
+    {
+      "case_id": "B024",
+      "category": "multi_table_join",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 2.268
+    },
+    {
+      "case_id": "B025",
+      "category": "multi_table_join",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 1.737
+    },
+    {
+      "case_id": "B026",
+      "category": "multi_table_join",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 2.021
+    },
+    {
+      "case_id": "B027",
+      "category": "multi_table_join",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 2.513
+    },
+    {
+      "case_id": "B028",
+      "category": "multi_table_join",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 2.556
+    },
+    {
+      "case_id": "B029",
+      "category": "multi_table_join",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 10,
+      "error": null,
+      "latency_seconds": 1.182
+    },
+    {
+      "case_id": "B030",
+      "category": "multi_table_join",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 10,
+      "error": null,
+      "latency_seconds": 2.096
+    },
+    {
+      "case_id": "B031",
+      "category": "multi_table_join",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 2.2
+    },
+    {
+      "case_id": "B032",
+      "category": "multi_table_join",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 1.744
+    },
+    {
+      "case_id": "B033",
+      "category": "multi_table_join",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 10,
+      "error": null,
+      "latency_seconds": 2.46
+    },
+    {
+      "case_id": "B034",
+      "category": "multi_table_join",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.529
+    },
+    {
+      "case_id": "B035",
+      "category": "multi_table_join",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 1.511
+    },
+    {
+      "case_id": "B036",
+      "category": "multi_table_join",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 8,
+      "error": null,
+      "latency_seconds": 0.612
+    },
+    {
+      "case_id": "B037",
+      "category": "multi_table_join",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 2,
+      "error": null,
+      "latency_seconds": 1.243
+    },
+    {
+      "case_id": "B038",
+      "category": "time_series",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 23,
+      "error": null,
+      "latency_seconds": 0.376
+    },
+    {
+      "case_id": "B039",
+      "category": "time_series",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 25,
+      "error": null,
+      "latency_seconds": 0.033
+    },
+    {
+      "case_id": "B040",
+      "category": "time_series",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.04
+    },
+    {
+      "case_id": "B041",
+      "category": "time_series",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 3,
+      "error": null,
+      "latency_seconds": 0.379
+    },
+    {
+      "case_id": "B042",
+      "category": "time_series",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 10,
+      "error": null,
+      "latency_seconds": 0.063
+    },
+    {
+      "case_id": "B043",
+      "category": "time_series",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 25,
+      "error": null,
+      "latency_seconds": 1.219
+    },
+    {
+      "case_id": "B044",
+      "category": "time_series",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 23,
+      "error": null,
+      "latency_seconds": 0.424
+    },
+    {
+      "case_id": "B045",
+      "category": "time_series",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 23,
+      "error": null,
+      "latency_seconds": 0.068
+    },
+    {
+      "case_id": "B046",
+      "category": "time_series",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 8,
+      "error": null,
+      "latency_seconds": 0.057
+    },
+    {
+      "case_id": "B047",
+      "category": "time_series",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 2,
+      "error": null,
+      "latency_seconds": 0.429
+    },
+    {
+      "case_id": "B048",
+      "category": "time_window",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.26
+    },
+    {
+      "case_id": "B049",
+      "category": "time_window",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.008
+    },
+    {
+      "case_id": "B050",
+      "category": "time_window",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.002
+    },
+    {
+      "case_id": "B051",
+      "category": "time_window",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.042
+    },
+    {
+      "case_id": "B052",
+      "category": "time_window",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 3,
+      "error": null,
+      "latency_seconds": 0.007
+    },
+    {
+      "case_id": "B053",
+      "category": "time_window",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 6,
+      "error": null,
+      "latency_seconds": 0.018
+    },
+    {
+      "case_id": "B054",
+      "category": "time_window",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.044
+    },
+    {
+      "case_id": "B055",
+      "category": "time_window",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.14
+    },
+    {
+      "case_id": "B056",
+      "category": "governed_metric",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.033
+    },
+    {
+      "case_id": "B057",
+      "category": "governed_metric",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.002
+    },
+    {
+      "case_id": "B058",
+      "category": "governed_metric",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.002
+    },
+    {
+      "case_id": "B059",
+      "category": "governed_metric",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.335
+    },
+    {
+      "case_id": "B060",
+      "category": "governed_metric",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.002
+    },
+    {
+      "case_id": "B061",
+      "category": "governed_metric",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.138
+    },
+    {
+      "case_id": "B062",
+      "category": "governed_metric",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 10,
+      "error": null,
+      "latency_seconds": 0.003
+    },
+    {
+      "case_id": "B063",
+      "category": "governed_metric",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.002
+    },
+    {
+      "case_id": "B064",
+      "category": "governed_metric",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.35
+    },
+    {
+      "case_id": "B065",
+      "category": "governed_metric",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.002
+    },
+    {
+      "case_id": "B066",
+      "category": "governed_metric",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.063
+    },
+    {
+      "case_id": "B067",
+      "category": "governed_metric",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.001
+    },
+    {
+      "case_id": "B068",
+      "category": "ratio_metric",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.001
+    },
+    {
+      "case_id": "B069",
+      "category": "ratio_metric",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.005
+    },
+    {
+      "case_id": "B070",
+      "category": "ratio_metric",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 10,
+      "error": null,
+      "latency_seconds": 0.002
+    },
+    {
+      "case_id": "B071",
+      "category": "ratio_metric",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.012
+    },
+    {
+      "case_id": "B072",
+      "category": "ratio_metric",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.012
+    },
+    {
+      "case_id": "B073",
+      "category": "ratio_metric",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.005
+    },
+    {
+      "case_id": "B074",
+      "category": "ratio_metric",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 10,
+      "error": null,
+      "latency_seconds": 0.637
+    },
+    {
+      "case_id": "B075",
+      "category": "ratio_metric",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.407
+    },
+    {
+      "case_id": "B076",
+      "category": "complex_filter",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 5,
+      "error": null,
+      "latency_seconds": 0.008
+    },
+    {
+      "case_id": "B077",
+      "category": "complex_filter",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 9,
+      "error": null,
+      "latency_seconds": 0.002
+    },
+    {
+      "case_id": "B078",
+      "category": "complex_filter",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.003
+    },
+    {
+      "case_id": "B079",
+      "category": "complex_filter",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 10,
+      "error": null,
+      "latency_seconds": 0.401
+    },
+    {
+      "case_id": "B080",
+      "category": "complex_filter",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.635
+    },
+    {
+      "case_id": "B081",
+      "category": "complex_filter",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.638
+    },
+    {
+      "case_id": "B082",
+      "category": "complex_filter",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 1,
+      "error": null,
+      "latency_seconds": 0.014
+    },
+    {
+      "case_id": "B083",
+      "category": "ambiguity",
+      "difficulty": "easy",
+      "gold_valid": true,
+      "gold_row_count": null,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "B084",
+      "category": "ambiguity",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": null,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "B085",
+      "category": "ambiguity",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": null,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "B086",
+      "category": "empty_result",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": 0,
+      "error": null,
+      "latency_seconds": 0.002
+    },
+    {
+      "case_id": "B087",
+      "category": "empty_result",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 0,
+      "error": null,
+      "latency_seconds": 0.001
+    },
+    {
+      "case_id": "B088",
+      "category": "empty_result",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": 0,
+      "error": null,
+      "latency_seconds": 0.001
+    },
+    {
+      "case_id": "B089",
+      "category": "out_of_domain",
+      "difficulty": "medium",
+      "gold_valid": true,
+      "gold_row_count": null,
+      "latency_seconds": 0.0
+    },
+    {
+      "case_id": "B090",
+      "category": "out_of_domain",
+      "difficulty": "hard",
+      "gold_valid": true,
+      "gold_row_count": null,
+      "latency_seconds": 0.0
+    }
+  ],
+  "safety_results": []
+}

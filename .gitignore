@@ -32,5 +32,11 @@ data/*.building
 # 日志/临时文件
 *.log
 *.tmp
+.agent_server.pid
+logs/
+build/
+dist/
+*.spec
 reports/live_batch_*.json
 reports/performance_*.json
+reports/demo_acceptance_*.json

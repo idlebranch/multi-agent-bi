@@ -26,6 +26,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(graph.calls, 1)
         self.assertEqual(final_state["final_answer"], "done")
         self.assertEqual([item["node"] for item in trace], ["supervisor", "format_answer"])
+        self.assertGreaterEqual(final_state["total_duration_ms"], 0)
 
 
 if __name__ == "__main__":

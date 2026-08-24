@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -13,17 +13,27 @@ class ApiContractTests(unittest.TestCase):
     def test_health_reports_the_active_database(self) -> None:
         client = TestClient(api_module.api)
         with (
-            patch("api.get_db_path") as get_db_path,
+            patch(
+                "api.get_database_health_summary",
+                return_value={
+                    "status": "ready",
+                    "file": "fixture.sqlite",
+                    "bytes": 123,
+                    "size_mib": 0.1,
+                    "read_only": True,
+                    "integrity_check": "ok",
+                    "foreign_key_violations": 0,
+                    "date_range": ["2018-01-01", "2018-10-17"],
+                    "table_counts": {"orders": 3},
+                    "semantic_table_counts": {},
+                },
+            ),
             patch(
                 "api.get_active_dataset_manifest",
                 return_value=({"name": "fixture"}, object()),
             ),
             patch("api.get_data_as_of_date", return_value="2018-10-17"),
         ):
-            database = MagicMock()
-            database.name = "fixture.sqlite"
-            database.stat.return_value.st_size = 123
-            get_db_path.return_value = database
             response = client.get("/health")
 
         self.assertEqual(response.status_code, 200)
@@ -31,7 +41,7 @@ class ApiContractTests(unittest.TestCase):
         self.assertEqual(response.json()["database"]["dataset"], "fixture")
         self.assertEqual(response.json()["database"]["file"], "fixture.sqlite")
 
-    def test_request_runs_workflow_once_and_defaults_to_stable_version(self) -> None:
+    def test_request_runs_workflow_once_and_uses_production_version(self) -> None:
         final_state = create_initial_state("question", as_of_date="2026-07-17")
         final_state.update(
             {
@@ -42,6 +52,7 @@ class ApiContractTests(unittest.TestCase):
                 "result_row_count": 1,
                 "sql_result": [{"count": 3}],
                 "final_answer": "3 records",
+                "response_status": "success",
             }
         )
         client = TestClient(api_module.api)
@@ -52,7 +63,7 @@ class ApiContractTests(unittest.TestCase):
             response = client.post("/ask", json={"question": "question"})
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["version"], "v1")
+        self.assertEqual(response.json()["version"], "Production 4.0.0")
         self.assertEqual(response.json()["result_row_count"], 1)
         run_once.assert_called_once()
 
@@ -72,10 +83,43 @@ class ApiContractTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["input_guard_status"], "blocked")
+        self.assertEqual(payload["input_guard_status"], "rejected")
+        self.assertEqual(payload["validation_status"], "rejected")
         self.assertEqual(payload["execution_status"], "not_started")
-        self.assertIn("安全策略拦截", payload["final_answer"])
+        self.assertIn("安全策略拒绝", payload["final_answer"])
         self.assertTrue(payload["policy_decisions"])
+        timeline_statuses = {
+            item["node"]: item["status"] for item in payload["timeline"]
+        }
+        self.assertEqual(timeline_statuses["sql_validation"], "rejected")
+        self.assertEqual(timeline_statuses["sql_execution"], "not_started")
+
+    def test_public_api_rejects_legacy_version_switch(self) -> None:
+        client = TestClient(api_module.api)
+        response = client.post(
+            "/ask",
+            json={"question": "count orders", "version": "v2"},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_clarification_response_skips_sql_and_database(self) -> None:
+        client = TestClient(api_module.api)
+        response = client.post("/ask", json={"question": "哪个商品最好？"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["response_status"], "clarification")
+        self.assertEqual(payload["execution_status"], "not_started")
+        self.assertEqual(payload["sql"], "")
+        self.assertEqual(len(payload["clarification_options"]), 4)
+
+    def test_out_of_scope_response_explains_olist_boundary(self) -> None:
+        client = TestClient(api_module.api)
+        response = client.post("/ask", json={"question": "分析员工绩效。"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["response_status"], "out_of_scope")
+        self.assertIn("不包含员工", payload["final_answer"])
+        self.assertEqual(payload["execution_status"], "not_started")
 
 
 if __name__ == "__main__":

@@ -37,8 +37,8 @@
       "tools": ["execute_sql_read_only"]
     },
     "format_answer": {
-      "inputs": ["question", "as_of_date", "input_guard_status", "input_risk_flags", "schema_status", "execution_status", "execution_error_code", "sql_result", "result_row_count", "result_truncated", "error", "error_history", "terminal_reason"],
-      "outputs": ["final_answer"],
+      "inputs": ["question", "as_of_date", "input_guard_status", "input_risk_flags", "request_status", "request_message", "clarification_options", "schema_status", "review_status", "validation_status", "execution_status", "execution_error_code", "sql_attempt_history", "sql_result", "result_row_count", "result_truncated", "error", "error_history", "terminal_reason"],
+      "outputs": ["final_answer", "response_status"],
       "tools": ["llm"]
     }
   },

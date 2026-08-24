@@ -1,0 +1,48 @@
+{
+  "B007": {
+    "ordering_required": false,
+    "evaluation_rationale": "The question does not request payment types in a particular order."
+  },
+  "B020": {
+    "top_k_tie_column": "photos_qty",
+    "top_k_entity_columns": ["product_id"],
+    "evaluation_rationale": "Different products tied at the fifth-place photo count are interchangeable."
+  },
+  "B042": {
+    "comparison_gold_transform": "split_year_quarter",
+    "evaluation_rationale": "YYYY-Qn and separate year/Qn columns are equivalent quarter representations."
+  },
+  "B045": {
+    "comparison_gold_columns": ["month", "on_time_delivery_pct"],
+    "evaluation_rationale": "Measured-order count supports the calculation but was not requested as output."
+  },
+  "B062": {
+    "comparison_gold_columns": ["category_name", "category_average_order_value"],
+    "evaluation_rationale": "Order count and GMV are supporting fields; the question requests category AOV."
+  },
+  "B063": {
+    "ordering_required": false,
+    "evaluation_rationale": "The question requests values by payment type without an ordering requirement."
+  },
+  "B070": {
+    "ordering_ties_allowed": true,
+    "evaluation_rationale": "Ratios that become equal at two-decimal display precision may exchange order."
+  },
+  "B075": {
+    "allow_agent_extra_columns": true,
+    "evaluation_rationale": "Previous-month GMV is a valid supporting column for the requested MoM result."
+  },
+  "B076": {
+    "comparison_gold_columns": ["customer_state", "on_time_delivery_pct"],
+    "answer_assertions": {
+      "expected_status": "success",
+      "ordered_gold_entities": {"column": "customer_state", "limit": 3},
+      "required_gold_values": [{"row": 0, "column": "on_time_delivery_pct", "tolerance": 0.02}]
+    },
+    "evaluation_rationale": "Measured-order count is a HAVING constraint, not a requested output."
+  },
+  "B079": {
+    "comparison_gold_columns": ["seller_id", "delivered_gmv"],
+    "evaluation_rationale": "Item count is a HAVING constraint; the requested output is seller and GMV."
+  }
+}

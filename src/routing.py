@@ -37,10 +37,17 @@ def decide_next_node(state: BIAgentState) -> RouteDecision:
     schema_attempts = int(policy_limit("schema_attempts", 2))
     sql_attempts = int(policy_limit("sql_attempts", 3))
 
-    if state.get("input_guard_status") == "blocked":
+    if state.get("input_guard_status") == "rejected":
         return RouteDecision(
             "format_answer",
-            "input guard blocked a likely prompt-injection or secret-extraction request",
+            "input guard rejected a write, injection, rule-bypass, or secret request",
+        )
+
+    request_status = state.get("request_status", "ready")
+    if request_status in {"clarification_required", "out_of_scope"}:
+        return RouteDecision(
+            "format_answer",
+            f"request classified as {request_status} before schema linking",
         )
 
     if iteration >= max_iterations:

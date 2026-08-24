@@ -1,4 +1,8 @@
-"""Experimental graph: deterministic flow plus LLM-assisted recovery."""
+"""Legacy experimental graph kept only for historical regression reference.
+
+The public API, web UI, CLI, and launcher use src.graph.app exclusively.
+Production recovery is deterministic and bounded by the policy limits.
+"""
 
 from __future__ import annotations
 
