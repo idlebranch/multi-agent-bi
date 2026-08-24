@@ -10,10 +10,16 @@ from pydantic import ValidationError
 from src.config import get_llm
 from src.contracts import SchemaSelection
 from src.guardrails import untrusted_text_block
+from src.observability import invoke_llm_observed
 from src.policy import require_tool
 from src.semantic_rules import get_metric_guidance, preferred_tables_for_question
 from src.state import BIAgentState, record_error
-from src.tools.db_tools import get_db_overview, get_table_columns, list_tables
+from src.tools.db_tools import (
+    get_catalog_metrics,
+    get_db_overview,
+    get_table_columns,
+    list_tables,
+)
 
 
 SYSTEM_PROMPT = """You are the catalog agent for a BI system.
@@ -44,6 +50,8 @@ def _clean_json_response(raw: str) -> str:
 
 
 def schema_linking_node(state: BIAgentState) -> dict:
+    llm_stage_calls = list(state.get("llm_stage_calls", []))
+    schema_context_metrics = dict(state.get("schema_context_metrics", {}))
     try:
         is_relink = bool(
             state.get("schema_status") == "succeeded"
@@ -51,6 +59,8 @@ def schema_linking_node(state: BIAgentState) -> dict:
             and state.get("review_issues")
         )
         refresh_count = int(state.get("schema_refresh_count", 0)) + int(is_relink)
+        require_tool("schema_linking", "get_catalog_metrics")
+        schema_context_metrics.update(get_catalog_metrics())
         require_tool("schema_linking", "list_tables")
         known_tables = set(list_tables())
         preferred_tables = preferred_tables_for_question(state["question"])
@@ -64,6 +74,15 @@ def schema_linking_node(state: BIAgentState) -> dict:
             for table in governed_tables:
                 require_tool("schema_linking", "get_table_columns")
                 selected_columns[table] = sorted(get_table_columns(table))
+            schema_context_metrics.update(
+                {
+                    "selected_table_count": len(governed_tables),
+                    "selected_column_count": sum(
+                        len(columns) for columns in selected_columns.values()
+                    ),
+                    "catalog_context_chars": 0,
+                }
+            )
             return {
                 "relevant_tables": governed_tables,
                 "relevant_columns": selected_columns,
@@ -72,6 +91,8 @@ def schema_linking_node(state: BIAgentState) -> dict:
                     f"Governed metric view selected: {', '.join(governed_tables)}"
                 ),
                 "schema_refresh_count": refresh_count,
+                "schema_context_metrics": schema_context_metrics,
+                "llm_stage_calls": llm_stage_calls,
                 "terminal_reason": "",
                 "error": "",
                 "error_source": "",
@@ -79,6 +100,7 @@ def schema_linking_node(state: BIAgentState) -> dict:
 
         require_tool("schema_linking", "get_db_overview")
         catalog = get_db_overview()
+        schema_context_metrics["catalog_context_chars"] = min(len(catalog), 50_000)
         recovery_context = ""
         if is_relink:
             recovery_context = (
@@ -96,22 +118,28 @@ def schema_linking_node(state: BIAgentState) -> dict:
                 )
             )
         require_tool("schema_linking", "llm")
-        response = get_llm(0.0).invoke(
-            [
-                SystemMessage(content=SYSTEM_PROMPT),
-                HumanMessage(
-                    content=(
-                        untrusted_text_block(
-                            "database_catalog", catalog, max_chars=50_000
+        response = invoke_llm_observed(
+            llm_stage_calls,
+            "schema_linking",
+            lambda: get_llm(0.0).invoke(
+                [
+                    SystemMessage(content=SYSTEM_PROMPT),
+                    HumanMessage(
+                        content=(
+                            untrusted_text_block(
+                                "database_catalog", catalog, max_chars=50_000
+                            )
+                            + "\n\n"
+                            + get_metric_guidance(state["question"])
+                            + "\n\n"
+                            + untrusted_text_block(
+                                "user_question", state["question"], max_chars=2000
+                            )
+                            + recovery_context
                         )
-                        + "\n\n"
-                        + get_metric_guidance(state["question"])
-                        + "\n\n"
-                        + untrusted_text_block("user_question", state["question"], max_chars=2000)
-                        + recovery_context
-                    )
-                ),
-            ]
+                    ),
+                ]
+            ),
         )
         selection = SchemaSelection.model_validate_json(
             _clean_json_response(str(response.content))
@@ -127,6 +155,14 @@ def schema_linking_node(state: BIAgentState) -> dict:
                 for column in selection.columns.get(table, [])
                 if column in known_columns
             ]
+        schema_context_metrics.update(
+            {
+                "selected_table_count": len(selected_tables),
+                "selected_column_count": sum(
+                    len(columns) for columns in selected_columns.values()
+                ),
+            }
+        )
 
         if not selected_tables:
             return {
@@ -135,6 +171,8 @@ def schema_linking_node(state: BIAgentState) -> dict:
                 "schema_status": "no_match",
                 "schema_reasoning": selection.reasoning,
                 "schema_refresh_count": refresh_count,
+                "schema_context_metrics": schema_context_metrics,
+                "llm_stage_calls": llm_stage_calls,
                 "terminal_reason": "当前数据库目录中没有能回答该问题的表或字段",
                 "error": "",
                 "error_source": "",
@@ -146,6 +184,8 @@ def schema_linking_node(state: BIAgentState) -> dict:
             "schema_status": "succeeded",
             "schema_reasoning": selection.reasoning,
             "schema_refresh_count": refresh_count,
+            "schema_context_metrics": schema_context_metrics,
+            "llm_stage_calls": llm_stage_calls,
             "terminal_reason": "",
             "error": "",
             "error_source": "",
@@ -157,6 +197,8 @@ def schema_linking_node(state: BIAgentState) -> dict:
             "relevant_columns": {},
             "schema_status": "failed",
             "schema_refresh_count": int(state.get("schema_refresh_count", 0)),
+            "schema_context_metrics": schema_context_metrics,
+            "llm_stage_calls": llm_stage_calls,
             **record_error(state, "schema_linking", message),
         }
     except Exception as exc:  # Provider and transport errors vary by SDK.
@@ -166,5 +208,7 @@ def schema_linking_node(state: BIAgentState) -> dict:
             "relevant_columns": {},
             "schema_status": "failed",
             "schema_refresh_count": int(state.get("schema_refresh_count", 0)),
+            "schema_context_metrics": schema_context_metrics,
+            "llm_stage_calls": llm_stage_calls,
             **record_error(state, "schema_linking", message),
         }

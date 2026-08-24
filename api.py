@@ -21,6 +21,7 @@ from src.config import (
 )
 from src.graph import app as production_agent
 from src.guardrails import sanitize_public_value, sanitize_result_rows
+from src.observability import log_run_summary, summarize_llm_observations
 from src.policy import POLICY_VERSION, policy_limit
 from src.state import BIAgentState, create_initial_state
 from src.tools.db_tools import get_database_health_summary
@@ -55,6 +56,7 @@ class AskRequest(BaseModel):
 
 
 class AskResponse(BaseModel):
+    request_id: str
     run_id: str
     question: str
     version: str
@@ -66,10 +68,14 @@ class AskResponse(BaseModel):
     sql_result: list
     iteration: int
     total_duration_ms: float
+    db_capacity_wait_ms: float
     repair_count: int
     auto_repaired: bool
     relevant_tables: list
     relevant_columns: dict
+    schema_context_metrics: dict
+    llm_metrics: dict
+    numerical_faithfulness: dict
     timeline: list[dict]
     trace: list
     routing_history: list
@@ -267,6 +273,7 @@ def _build_timeline(trace: list[dict], final_state: BIAgentState) -> list[dict]:
 
 def _public_run_state(final_state: BIAgentState) -> dict[str, Any]:
     keys = (
+        "request_id",
         "run_id",
         "question",
         "as_of_date",
@@ -276,6 +283,9 @@ def _public_run_state(final_state: BIAgentState) -> dict[str, Any]:
         "input_risk_flags",
         "relevant_tables",
         "relevant_columns",
+        "schema_context_metrics",
+        "llm_stage_calls",
+        "numerical_faithfulness",
         "schema_status",
         "schema_reasoning",
         "sql_status",
@@ -292,6 +302,7 @@ def _public_run_state(final_state: BIAgentState) -> dict[str, Any]:
         "visit_count",
         "node_timings",
         "total_duration_ms",
+        "db_capacity_wait_ms",
         "terminal_reason",
     )
     return sanitize_public_value(
@@ -311,6 +322,7 @@ def _response_from_state(
     if final_state.get("input_guard_status") == "rejected":
         validation_status = "rejected"
     return AskResponse(
+        request_id=final_state.get("request_id", ""),
         run_id=final_state.get("run_id", ""),
         question=sanitize_public_value(final_state.get("question", "")),
         version=f"Production {APP_VERSION}",
@@ -326,10 +338,20 @@ def _response_from_state(
         ),
         iteration=final_state.get("iteration", 0),
         total_duration_ms=float(final_state.get("total_duration_ms", 0.0)),
+        db_capacity_wait_ms=float(final_state.get("db_capacity_wait_ms", 0.0)),
         repair_count=repair_count,
         auto_repaired=repair_count > 0,
         relevant_tables=sanitize_public_value(final_state.get("relevant_tables", [])),
         relevant_columns=sanitize_public_value(final_state.get("relevant_columns", {})),
+        schema_context_metrics=sanitize_public_value(
+            final_state.get("schema_context_metrics", {})
+        ),
+        llm_metrics=summarize_llm_observations(
+            final_state.get("llm_stage_calls", [])
+        ),
+        numerical_faithfulness=sanitize_public_value(
+            final_state.get("numerical_faithfulness", {})
+        ),
         timeline=_build_timeline(compact_trace, final_state),
         trace=compact_trace,
         routing_history=sanitize_public_value(
@@ -368,7 +390,11 @@ async def ask(req: AskRequest) -> AskResponse:
             initial_state,
         )
     except Exception:
-        LOGGER.exception("production workflow failed for run_id=%s", initial_state["run_id"])
+        LOGGER.error(
+            "production workflow failed request_id=%s run_id=%s",
+            initial_state["request_id"],
+            initial_state["run_id"],
+        )
         final_state = dict(initial_state)
         final_state.update(
             {
@@ -378,6 +404,7 @@ async def ask(req: AskRequest) -> AskResponse:
             }
         )
         trace = []
+        log_run_summary(final_state)
     return _response_from_state(final_state, trace)
 
 
@@ -394,7 +421,7 @@ def health(refresh: bool = Query(default=False)) -> dict[str, Any]:
         database_ready = diagnostics.get("status") == "ready"
         status = "ok" if database_ready else "degraded"
     except Exception:  # Health must degrade safely for any database driver failure.
-        LOGGER.exception("database health check failed")
+        LOGGER.error("database health check failed")
         diagnostics = {
             "status": "unavailable",
             "message": "PostgreSQL 暂时不可访问，请检查数据库连接配置。",

@@ -149,6 +149,15 @@ class AnswerEvaluatorTests(unittest.TestCase):
         )
         self.assertTrue(result["passed"])
 
+    def test_single_year_heading_applies_to_bare_month_bullets(self) -> None:
+        result = evaluate_answer(
+            "2018年上半年每月取消率：1月0.47%，2月1.09%。",
+            {"required_gold_entities": [{"row": 0, "column": "month"}]},
+            gold_rows=[{"month": "2018-01"}],
+            response_status="success",
+        )
+        self.assertTrue(result["passed"])
+
     def test_reviewer_rejection_rate_formats_without_pass_fields(self) -> None:
         self.assertEqual(
             _format_rate({"rejections": 1, "attempts": 4, "rate": 0.25}),

@@ -12,6 +12,8 @@ from src.guardrails import (
     sanitize_result_rows,
     untrusted_text_block,
 )
+from src.numerical_faithfulness import enforce_numerical_faithfulness
+from src.observability import invoke_llm_observed
 from src.policy import require_tool
 from src.semantic_rules import question_uses_relative_time
 from src.state import BIAgentState
@@ -70,6 +72,7 @@ def _anchor_relative_answer(answer: str, state: BIAgentState) -> str:
 
 
 def format_answer_node(state: BIAgentState) -> dict:
+    llm_stage_calls = list(state.get("llm_stage_calls", []))
     if state.get("input_guard_status") == "rejected":
         return {
             "final_answer": (
@@ -126,13 +129,23 @@ Result truncated: {state.get('result_truncated', False)}
 """
     try:
         require_tool("format_answer", "llm")
-        response = get_llm(0.2).invoke(
-            [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=prompt)]
+        response = invoke_llm_observed(
+            llm_stage_calls,
+            "format_answer",
+            lambda: get_llm(0.2).invoke(
+                [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=prompt)]
+            ),
         )
         answer = sanitize_model_output(str(response.content))
+        faithful_answer, numerical_faithfulness = enforce_numerical_faithfulness(
+            answer,
+            result,
+        )
         return {
-            "final_answer": _anchor_relative_answer(answer, state),
+            "final_answer": _anchor_relative_answer(faithful_answer, state),
             "response_status": "success",
+            "llm_stage_calls": llm_stage_calls,
+            "numerical_faithfulness": numerical_faithfulness,
         }
     except Exception:
         # A useful answer is still returned if the prose model is unavailable.
@@ -147,4 +160,10 @@ Result truncated: {state.get('result_truncated', False)}
                 state,
             ),
             "response_status": "success",
+            "llm_stage_calls": llm_stage_calls,
+            "numerical_faithfulness": {
+                "status": "deterministic_fallback",
+                "percentage_claim_count": 0,
+                "mismatch_count": 0,
+            },
         }

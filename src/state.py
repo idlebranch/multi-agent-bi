@@ -31,6 +31,7 @@ ResponseStatus = Literal[
 
 class BIAgentState(TypedDict, total=False):
     # Request context
+    request_id: str
     run_id: str
     question: str
     as_of_date: str
@@ -43,6 +44,7 @@ class BIAgentState(TypedDict, total=False):
     # Catalog / schema selection
     relevant_tables: list[str]
     relevant_columns: dict[str, list[str]]
+    schema_context_metrics: dict[str, int]
     schema_status: StageStatus
     schema_reasoning: str
     schema_refresh_count: int
@@ -64,6 +66,11 @@ class BIAgentState(TypedDict, total=False):
     result_truncated: bool
     execution_status: ExecutionStatus
     execution_error_code: str
+    db_capacity_wait_ms: float
+
+    # Provider-reported observability. Token counts remain absent when the
+    # provider does not return usage metadata; they are never estimated.
+    llm_stage_calls: list[dict]
 
     # Error and recovery audit trail
     error: str
@@ -87,6 +94,7 @@ class BIAgentState(TypedDict, total=False):
     # Response
     final_answer: str
     response_status: ResponseStatus
+    numerical_faithfulness: dict
 
 
 def create_initial_state(
@@ -100,6 +108,7 @@ def create_initial_state(
     screening = screen_user_question(question)
     guard_duration_ms = round((perf_counter() - guard_started) * 1000, 3)
     return {
+        "request_id": uuid4().hex,
         "run_id": uuid4().hex,
         "question": screening["question"],
         "as_of_date": as_of_date or get_data_as_of_date(),
@@ -110,6 +119,14 @@ def create_initial_state(
         "clarification_options": screening["clarification_options"],
         "relevant_tables": [],
         "relevant_columns": {},
+        "schema_context_metrics": {
+            "available_table_count": 0,
+            "available_column_count": 0,
+            "selected_table_count": 0,
+            "selected_column_count": 0,
+            "catalog_context_chars": 0,
+            "selected_schema_context_chars": 0,
+        },
         "schema_status": "not_started",
         "schema_reasoning": "",
         "schema_refresh_count": 0,
@@ -126,6 +143,8 @@ def create_initial_state(
         "result_truncated": False,
         "execution_status": "not_started",
         "execution_error_code": "",
+        "db_capacity_wait_ms": 0.0,
+        "llm_stage_calls": [],
         "error": "",
         "error_source": "",
         "error_history": [],
@@ -150,6 +169,11 @@ def create_initial_state(
         "total_duration_ms": 0.0,
         "final_answer": "",
         "response_status": "pending",
+        "numerical_faithfulness": {
+            "status": "not_started",
+            "percentage_claim_count": 0,
+            "mismatch_count": 0,
+        },
     }
 
 

@@ -7,6 +7,7 @@ import json
 import math
 import os
 import platform
+import re
 import statistics
 import subprocess
 import sys
@@ -38,6 +39,7 @@ from benchmarks.schema import (  # noqa: E402
 from src.config import DEEPSEEK_BASE_URL, DEEPSEEK_MODEL, get_data_as_of_date  # noqa: E402
 from src.graph import app as production_agent  # noqa: E402
 from src.guardrails import sanitize_public_value  # noqa: E402
+from src.observability import summarize_llm_observations  # noqa: E402
 from src.state import create_initial_state  # noqa: E402
 from src.tools.db_tools import (  # noqa: E402
     execute_sql,
@@ -111,15 +113,52 @@ def _execute(sql: str) -> dict[str, Any]:
     return execute_sql(sql, max_rows=10_000, timeout_seconds=30)
 
 
-def _stage_counts(trace: list[dict[str, Any]]) -> tuple[int, int, int]:
-    llm_nodes = {"schema_linking", "sql_generation", "sql_review", "format_answer"}
-    observed_llm_stages = sum(item.get("node") in llm_nodes for item in trace)
+def _stage_counts(
+    state: dict[str, Any], trace: list[dict[str, Any]]
+) -> tuple[dict[str, Any], int, int]:
+    llm_metrics = summarize_llm_observations(state.get("llm_stage_calls", []))
     review_attempts = sum(item.get("node") == "sql_review" for item in trace)
     review_rejections = sum(
         item.get("node") == "sql_review" and item.get("review_status") == "failed"
         for item in trace
     )
-    return observed_llm_stages, review_attempts, review_rejections
+    return llm_metrics, review_attempts, review_rejections
+
+
+def _canonical_quarter(value: Any) -> str | None:
+    text = str(value).strip().upper()
+    match = re.fullmatch(r"(?:Q|QUARTER\s*)?([1-4])(?:\.0+)?", text)
+    return f"Q{match.group(1)}" if match else None
+
+
+def _canonical_year(value: Any) -> str:
+    text = str(value).strip()
+    match = re.fullmatch(r"(\d{4})(?:\.0+)?", text)
+    return match.group(1) if match else text
+
+
+def _normalize_year_quarter_rows(
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Canonicalize both YYYY-Qn and separate year/quarter result shapes."""
+    normalized: list[dict[str, Any]] = []
+    for row in rows:
+        values = dict(row)
+        year: str | None = None
+        quarter: str | None = None
+        if "year" in values and "quarter" in values:
+            year = _canonical_year(values.pop("year"))
+            quarter = _canonical_quarter(values.pop("quarter"))
+        elif "quarter" in values:
+            combined = str(values.pop("quarter")).strip().upper()
+            match = re.fullmatch(r"(\d{4})\s*[-/]?\s*Q([1-4])", combined)
+            if match:
+                year, quarter = match.group(1), f"Q{match.group(2)}"
+        if year is None or quarter is None:
+            normalized.append(dict(row))
+            continue
+        normalized.append({"year": year, "quarter": quarter, **values})
+    return normalized
 
 
 def compare_case_results(
@@ -128,14 +167,8 @@ def compare_case_results(
     agent_rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
     if case.get("comparison_gold_transform") == "split_year_quarter":
-        gold_rows = [
-            {
-                "year": str(row["quarter"]).split("-", 1)[0],
-                "quarter": str(row["quarter"]).split("-", 1)[1],
-                "order_count": row["order_count"],
-            }
-            for row in gold_rows
-        ]
+        gold_rows = _normalize_year_quarter_rows(gold_rows)
+        agent_rows = _normalize_year_quarter_rows(agent_rows)
     comparison_columns = case.get("comparison_gold_columns")
     if comparison_columns:
         gold_rows = [
@@ -257,11 +290,13 @@ def run_business_case(case: dict[str, Any]) -> dict[str, Any]:
             exception=exception,
         )
 
-    observed_llm_stages, review_attempts, review_rejections = _stage_counts(trace)
+    llm_metrics, review_attempts, review_rejections = _stage_counts(state, trace)
     repair_count = max(0, len(state.get("sql_attempt_history", [])) - 1)
     return sanitize_public_value(
         {
             "case_id": case["case_id"],
+            "request_id": state.get("request_id"),
+            "run_id": state.get("run_id"),
             "category": case["category"],
             "difficulty": case["difficulty"],
             "question": case["question"],
@@ -279,9 +314,15 @@ def run_business_case(case: dict[str, Any]) -> dict[str, Any]:
             "repair_count": repair_count,
             "review_attempts": review_attempts,
             "review_rejections": review_rejections,
-            "observed_llm_stage_calls": observed_llm_stages,
+            "observed_llm_stage_calls": llm_metrics["llm_stage_calls"],
+            "llm_stage_breakdown": llm_metrics["llm_stage_breakdown"],
+            "sql_repair_llm_calls": llm_metrics["sql_repair_llm_calls"],
             "provider_request_count": None,
-            "token_usage": None,
+            "token_usage_availability": llm_metrics["token_usage_availability"],
+            "token_usage": llm_metrics["token_usage"],
+            "llm_stage_call_details": state.get("llm_stage_calls", []),
+            "schema_context_metrics": state.get("schema_context_metrics", {}),
+            "numerical_faithfulness": state.get("numerical_faithfulness", {}),
             "response_status": state.get("response_status"),
             "schema_status": state.get("schema_status"),
             "review_status": state.get("review_status"),
@@ -362,10 +403,12 @@ def run_safety_case(case: dict[str, Any]) -> dict[str, Any]:
     blocked = state.get("response_status") == expected_status
     database_never_called = database_execute_calls == 0
     final_passed = bool(transport_ok and blocked and database_never_called)
-    observed_llm_stages, review_attempts, review_rejections = _stage_counts(trace)
+    llm_metrics, review_attempts, review_rejections = _stage_counts(state, trace)
     return sanitize_public_value(
         {
             "case_id": case["case_id"],
+            "request_id": state.get("request_id"),
+            "run_id": state.get("run_id"),
             "attack_type": case["attack_type"],
             "prompt": case["prompt"],
             "expected_action": case["expected_action"],
@@ -385,9 +428,13 @@ def run_safety_case(case: dict[str, Any]) -> dict[str, Any]:
             "latency_seconds": round(elapsed, 3),
             "review_attempts": review_attempts,
             "review_rejections": review_rejections,
-            "observed_llm_stage_calls": observed_llm_stages,
+            "observed_llm_stage_calls": llm_metrics["llm_stage_calls"],
+            "llm_stage_breakdown": llm_metrics["llm_stage_breakdown"],
+            "sql_repair_llm_calls": llm_metrics["sql_repair_llm_calls"],
             "provider_request_count": None,
-            "token_usage": None,
+            "token_usage_availability": llm_metrics["token_usage_availability"],
+            "token_usage": llm_metrics["token_usage"],
+            "llm_stage_call_details": state.get("llm_stage_calls", []),
             "trace_nodes": [item.get("node") for item in trace],
             "exception": exception,
         },
@@ -411,6 +458,53 @@ def _percentile(values: list[float], percentile: float) -> float | None:
     ordered = sorted(values)
     index = max(0, math.ceil(percentile * len(ordered)) - 1)
     return round(ordered[index], 3)
+
+
+def _aggregate_token_usage(items: list[dict[str, Any]]) -> tuple[str, dict[str, int] | None]:
+    observed_calls = sum(int(item.get("observed_llm_stage_calls", 0)) for item in items)
+    usage_records = [
+        item["token_usage"] for item in items if isinstance(item.get("token_usage"), dict)
+    ]
+    if not usage_records:
+        return "unavailable", None
+    reported_calls = sum(int(item.get("reported_calls", 0)) for item in usage_records)
+    usage = {
+        key: sum(int(item.get(key, 0)) for item in usage_records)
+        for key in ("prompt_tokens", "completion_tokens", "total_tokens")
+    }
+    usage.update(
+        {
+            "reported_calls": reported_calls,
+            "unreported_calls": max(0, observed_calls - reported_calls),
+        }
+    )
+    return ("available" if reported_calls == observed_calls else "partial"), usage
+
+
+def _summarize_schema_context(items: list[dict[str, Any]]) -> dict[str, Any]:
+    keys = (
+        "available_table_count",
+        "available_column_count",
+        "selected_table_count",
+        "selected_column_count",
+        "catalog_context_chars",
+        "selected_schema_context_chars",
+    )
+    summary: dict[str, Any] = {}
+    for key in keys:
+        values = [
+            int(item["schema_context_metrics"][key])
+            for item in items
+            if isinstance(item.get("schema_context_metrics"), dict)
+            and key in item["schema_context_metrics"]
+        ]
+        summary[key] = {
+            "average": round(statistics.mean(values), 3) if values else None,
+            "minimum": min(values) if values else None,
+            "maximum": max(values) if values else None,
+            "measured_cases": len(values),
+        }
+    return summary
 
 
 def summarize(
@@ -447,6 +541,29 @@ def summarize(
     review_attempts = sum(int(item.get("review_attempts", 0)) for item in [*business, *safety])
     review_rejections = sum(int(item.get("review_rejections", 0)) for item in [*business, *safety])
     repair_counts = [int(item.get("repair_count", 0)) for item in business]
+    all_items = [*business, *safety]
+    token_availability, token_usage = _aggregate_token_usage(all_items)
+    stage_breakdown: Counter[str] = Counter()
+    for item in all_items:
+        stage_breakdown.update(item.get("llm_stage_breakdown", {}))
+    observed_llm_calls = sum(
+        int(item.get("observed_llm_stage_calls", 0)) for item in all_items
+    )
+    query_items = [item for item in business if query(item)]
+    if token_usage:
+        token_usage["average_total_tokens_per_business_case"] = (
+            round(token_usage["total_tokens"] / len(business), 3)
+            if business
+            else 0.0
+        )
+        token_usage["average_total_tokens_per_query_case"] = (
+            round(token_usage["total_tokens"] / len(query_items), 3)
+            if query_items
+            else 0.0
+        )
+    sql_repair_llm_calls = sum(
+        int(item.get("sql_repair_llm_calls", 0)) for item in business
+    )
     metrics.update(
         {
             "by_difficulty": by_difficulty,
@@ -455,6 +572,7 @@ def summarize(
                 "average": round(statistics.mean(latencies), 3) if latencies else None,
                 "p50": _percentile(latencies, 0.50),
                 "p95": _percentile(latencies, 0.95),
+                "maximum": round(max(latencies), 3) if latencies else None,
             },
             "average_repair_count": round(statistics.mean(repair_counts), 4) if repair_counts else None,
             "reviewer_rejection_rate": {
@@ -463,10 +581,32 @@ def summarize(
                 "rate": round(review_rejections / review_attempts, 4) if review_attempts else None,
             },
             "provider_request_count": None,
-            "token_usage": None,
-            "observed_llm_stage_calls": sum(
-                int(item.get("observed_llm_stage_calls", 0)) for item in [*business, *safety]
+            "token_usage_availability": token_availability,
+            "token_usage": token_usage,
+            "observed_llm_stage_calls": observed_llm_calls,
+            "average_llm_stage_calls_per_request": (
+                round(observed_llm_calls / len(all_items), 4)
+                if all_items
+                else None
             ),
+            "average_llm_stage_calls_per_business_case": (
+                round(observed_llm_calls / len(business), 4)
+                if business
+                else None
+            ),
+            "llm_stage_breakdown": dict(sorted(stage_breakdown.items())),
+            "sql_repair_llm_calls": sql_repair_llm_calls,
+            "llm_call_summary": {
+                "planner_router_calls": 0,
+                "schema_linking_calls": stage_breakdown.get("schema_linking", 0),
+                "sql_writer_calls": stage_breakdown.get("sql_generation", 0),
+                "review_calls": stage_breakdown.get("sql_review", 0),
+                "repair_calls_subset_of_sql_writer": sql_repair_llm_calls,
+                "answer_calls": stage_breakdown.get("format_answer", 0),
+                "total_stage_calls": observed_llm_calls,
+            },
+            "schema_context": _summarize_schema_context(business),
+            "schema_context_query_cases": _summarize_schema_context(query_items),
             "failure_taxonomy": [
                 {
                     "category": category,
@@ -530,6 +670,19 @@ def markdown_summary(report: dict[str, Any]) -> str:
         )
     latency = metrics.get("latency_seconds", {})
     rejection = metrics.get("reviewer_rejection_rate", {})
+    token_usage = metrics.get("token_usage")
+    token_line = (
+        f"provider-reported prompt={token_usage.get('prompt_tokens')}, "
+        f"completion={token_usage.get('completion_tokens')}, "
+        f"total={token_usage.get('total_tokens')} "
+        f"({metrics.get('token_usage_availability')})"
+        if token_usage
+        else "unavailable; provider usage metadata was not returned"
+    )
+    stage_breakdown = ", ".join(
+        f"{stage}={count}"
+        for stage, count in metrics.get("llm_stage_breakdown", {}).items()
+    ) or "none"
     lines.extend(
         [
             "",
@@ -538,11 +691,35 @@ def markdown_summary(report: dict[str, Any]) -> str:
             f"- Average latency: {latency.get('average', 'unavailable')} s",
             f"- P50 latency: {latency.get('p50', 'unavailable')} s",
             f"- P95 latency: {latency.get('p95', 'unavailable')} s",
+            f"- Maximum latency: {latency.get('maximum', 'unavailable')} s",
             f"- Average repair count: {metrics.get('average_repair_count', 'unavailable')}",
             f"- Reviewer rejection rate: {_format_rate(rejection)}",
-            f"- Observed LLM-stage calls (lower bound): {metrics.get('observed_llm_stage_calls')}",
-            "- Exact provider request count: unavailable (provider metadata is not retained in workflow state)",
-            "- Token usage: unavailable (provider usage metadata is not retained in workflow state)",
+            f"- Actual workflow LLM-stage invoke calls: {metrics.get('observed_llm_stage_calls')}",
+            f"- Average LLM-stage calls per all request: {metrics.get('average_llm_stage_calls_per_request')}",
+            f"- Average LLM-stage calls per business case: {metrics.get('average_llm_stage_calls_per_business_case')}",
+            f"- LLM-stage breakdown: {stage_breakdown}",
+            "- Planner/router LLM calls: 0 (routing is deterministic and policy-coded)",
+            f"- SQL-repair LLM calls: {metrics.get('sql_repair_llm_calls')}",
+            "- Exact provider HTTP request count: unavailable; SDK retries are not exposed as HTTP counts",
+            f"- Token usage: {token_line}",
+            f"- Average total tokens per business case: "
+            f"{token_usage.get('average_total_tokens_per_business_case') if token_usage else 'unavailable'}",
+            f"- Average total tokens per query case: "
+            f"{token_usage.get('average_total_tokens_per_query_case') if token_usage else 'unavailable'}",
+            "",
+            "## Schema context measurements",
+            "",
+            "Counts and character sizes below are measured from the actual workflow state; token counts are not estimated.",
+            "",
+            "| Measurement | All business avg | Query-case avg | Min | Max | Cases |",
+            "|---|---:|---:|---:|---:|---:|",
+            *[
+                f"| {name} | {values.get('average')} | "
+                f"{metrics.get('schema_context_query_cases', {}).get(name, {}).get('average')} | "
+                f"{values.get('minimum')} | "
+                f"{values.get('maximum')} | {values.get('measured_cases')} |"
+                for name, values in metrics.get("schema_context", {}).items()
+            ],
             "",
             "## Failure taxonomy",
             "",

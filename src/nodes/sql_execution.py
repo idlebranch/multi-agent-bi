@@ -18,6 +18,7 @@ def sql_execution_node(state: BIAgentState) -> dict:
             "result_truncated": False,
             "execution_status": "failed",
             "execution_error_code": "invalid_sql",
+            "db_capacity_wait_ms": 0.0,
             **record_error(state, "sql_execution", message),
         }
 
@@ -37,6 +38,7 @@ def sql_execution_node(state: BIAgentState) -> dict:
             "result_truncated": result["truncated"],
             "execution_status": "succeeded",
             "execution_error_code": "",
+            "db_capacity_wait_ms": float(result.get("capacity_wait_ms", 0.0)),
             "error": "",
             "error_source": "",
         }
@@ -48,5 +50,6 @@ def sql_execution_node(state: BIAgentState) -> dict:
         "result_truncated": False,
         "execution_status": "failed",
         "execution_error_code": str(result.get("error_code") or "database_error"),
+        "db_capacity_wait_ms": float(result.get("capacity_wait_ms", 0.0)),
         **record_error(state, "sql_execution", message),
     }

@@ -29,8 +29,9 @@ _RISK_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "secret_extraction",
         re.compile(
-            r"(reveal|show|print|return).{0,30}(api[_\s-]?key|password|secret|connection string)|"
-            r"(输出|显示|泄露).{0,20}(密钥|密码|连接字符串)",
+            r"(reveal|show|print|return|export|输出|显示|泄露|读取|导出)"
+            r".{0,50}(api[_\s-]?key|github\s*token|token|password|secret|"
+            r"connection\s*string|environment\s*variable|密钥|密码|令牌|连接字符串|环境变量)",
             re.IGNORECASE,
         ),
     ),
@@ -38,9 +39,28 @@ _RISK_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         "database_write",
         re.compile(
             r"\b(?:insert|update|delete|drop|alter|create|attach|detach|pragma|"
-            r"replace|truncate|vacuum|reindex)\b|"
-            r"(?:删除|删掉|清空|更新|插入|新增|创建|建表|删表|修改).{0,24}"
-            r"(?:数据库|数据表|表结构|记录|权限|orders\s*表|customers\s*表)",
+            r"replace|truncate|vacuum|reindex|grant|revoke|copy|call|execute|set)\b|"
+            r"(?:删除|删掉|清空|更新|插入|新增|创建|建表|删表|修改|授予|撤销).{0,24}"
+            r"(?:数据库|数据表|表结构|记录|权限|(?:[\w.]+\s*)?表)|"
+            r"(?:数据库|数据表|表结构|记录|权限|(?:[\w.]+\s*)?表).{0,24}"
+            r"(?:删除|删掉|清空|更新|插入|新增|修改|授予|撤销)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "obfuscated_database_write",
+        re.compile(
+            r"\b(?:d\s*e\s*l\s*e\s*t\s*e)\s+(?:f\s*r\s*o\s*m)\b|"
+            r"\b(?:d\s*r\s*o\s*p|t\s*r\s*u\s*n\s*c\s*a\s*t\s*e)\s+"
+            r"(?:t\s*a\s*b\s*l\s*e)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "encoded_execution",
+        re.compile(
+            r"(?:decode|base64|解码).{0,60}(?:execute|run|执行)|"
+            r"(?:execute|run|执行).{0,60}(?:base64|解码)",
             re.IGNORECASE,
         ),
     ),
