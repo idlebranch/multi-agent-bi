@@ -32,31 +32,50 @@
 
 网页右上角的“数据库状态”会读取 `/health` 的实际诊断结果，展示 PostgreSQL 版本、数据库大小、只读状态、时间范围及主要表行数。这些统计由后端轻量只读查询并缓存，不在前端写死。
 
-如需重新下载并构建：
+下载原始数据：
 
 ```powershell
 New-Item -ItemType Directory -Force data/raw | Out-Null
 Invoke-WebRequest `
   -Uri "https://www.kaggle.com/api/v1/datasets/download/olistbr/brazilian-ecommerce" `
   -OutFile data/raw/olist.zip
-uv run python scripts/load_olist_postgres.py --replace
 ```
 
-运行 loader 前需在 `.env` 中配置迁移账号的 `BI_MIGRATION_DATABASE_URL`。原始压缩包、数据库 volume 和 `.env` 不提交到 Git。Production Agent 的 `BI_DATABASE_URL` 必须使用 `agent_readonly`，不能使用迁移账号。
+Compose 的一次性 `loader` 会在空 warehouse 上加载数据；已初始化的 PostgreSQL volume 会直接复用，不会在 App 重启时重复 COPY。手动运行 loader 前需配置迁移账号的 `BI_MIGRATION_DATABASE_URL`。原始压缩包、数据库 volume 和 `.env` 不提交到 Git。Production Agent 的 `BI_DATABASE_URL` 必须使用 `agent_readonly`，不能使用迁移账号。
 
-## 首次安装
+## Docker Compose 启动（推荐）
 
-本地运行需要 Python 3.12+、[uv](https://docs.astral.sh/uv/) 和 PostgreSQL 17。
+需要 Docker Desktop、Linux containers 和 Compose。先把 Olist ZIP 放在 `data/raw/olist.zip`，然后：
 
 ```powershell
 cd C:\Users\10475\AI_PROJECT\multi_agent_bi
-uv sync --locked
 Copy-Item .env.example .env
+docker compose up --build -d
+docker compose ps
 ```
 
-在 `.env` 中配置 `DEEPSEEK_API_KEY`、PostgreSQL 初始化凭证、`BI_MIGRATION_DATABASE_URL` 和只读的 `BI_DATABASE_URL`。不要把 `.env` 或密钥提交到仓库。
+在 `.env` 中设置随机的 owner/readonly 密码，并配置 `DEEPSEEK_API_KEY`。Compose 内部通过服务名 `postgres:5432` 连接，不使用容器内的 `127.0.0.1`。不要把 `.env` 或密钥提交到仓库。
 
-## 启动方式一：PowerShell
+- 项目主页：<http://127.0.0.1:8000>
+- API 文档：<http://127.0.0.1:8000/docs>
+- 健康检查：<http://127.0.0.1:8000/health>
+
+查看 App 的非 root 身份：
+
+```powershell
+docker compose exec app id
+```
+
+## 本地 Python 启动（可选）
+
+本地开发需要 Python 3.12+、[uv](https://docs.astral.sh/uv/) 和一个已初始化的 PostgreSQL 17。
+
+```powershell
+Copy-Item .env.example .env
+uv sync --locked
+```
+
+在 `.env` 中配置 `DEEPSEEK_API_KEY`、`BI_MIGRATION_DATABASE_URL` 和使用 `agent_readonly` 的 `BI_DATABASE_URL`。
 
 ```powershell
 cd C:\Users\10475\AI_PROJECT\multi_agent_bi
@@ -69,7 +88,7 @@ uv run python api.py
 - API 文档：<http://127.0.0.1:8000/docs>
 - 健康检查：<http://127.0.0.1:8000/health>
 
-## 启动方式二：Windows 图形启动器
+## Windows 图形启动器
 
 先构建一次轻量 EXE：
 
@@ -136,6 +155,16 @@ uv run python scripts/smoke_test_deepseek.py
 
 ```powershell
 uv run python benchmarks/run_benchmark.py --live-agent --suite business --case-id B001
+```
+
+Docker 验证：
+
+```powershell
+docker compose build
+docker compose up -d
+docker compose ps
+docker compose exec app id
+docker compose restart
 ```
 
 ## 数据库架构
