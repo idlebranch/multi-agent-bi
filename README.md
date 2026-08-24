@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/idlebranch/multi-agent-bi/actions/workflows/ci.yml/badge.svg)](https://github.com/idlebranch/multi-agent-bi/actions/workflows/ci.yml)
 
+> **PROJECT STATUS: PORTFOLIO READY** — final benchmark and Production CI are green. The repository is frozen except for bug fixes and dependency/security maintenance.
+
 一个面向 Olist 电商数据的 Production 级只读 BI Agent：用户用自然语言提问，LangGraph 工作流完成 Schema Linking、PostgreSQL SQL 生成、独立 Reviewer、只读验证与执行，再生成中文业务回答。FastAPI 提供 API 和可视化时间线，PostgreSQL 17 保存完整数据仓库。
 
 ![Production BI Agent UI](docs/production_ui.png)
