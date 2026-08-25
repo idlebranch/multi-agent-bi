@@ -39,6 +39,8 @@ class SchemaSelection(StrictContract):
     tables: list[str] = Field(default_factory=list, max_length=20)
     columns: dict[str, list[str]] = Field(default_factory=dict)
     reasoning: str = Field(default="", max_length=1000)
+    question_status: Literal["clear", "ambiguous"] = "clear"
+    clarification_question: str = Field(default="", max_length=500)
 
 
 class ReviewIssue(StrictContract):

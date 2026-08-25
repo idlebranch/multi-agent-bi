@@ -526,6 +526,13 @@ def review_sql_semantics(question: str, sql: str) -> list[ReviewIssue]:
                 "0-100 scale; multiply the canceled-order fraction by 100.",
             )
         )
+    if not question_requests_time_scope(question) and _contains_date_filter(value):
+        issues.append(
+            _issue(
+                "wrong_date_range",
+                "Remove the date filter because the user did not request a time range.",
+            )
+        )
     if metric is None:
         return issues
 
@@ -613,13 +620,6 @@ def review_sql_semantics(question: str, sql: str) -> list[ReviewIssue]:
                 )
             )
 
-    if not question_requests_time_scope(question) and _contains_date_filter(value):
-        issues.append(
-            _issue(
-                "wrong_date_range",
-                "Remove the date filter because the user did not request a time range.",
-            )
-        )
     return issues
 
 

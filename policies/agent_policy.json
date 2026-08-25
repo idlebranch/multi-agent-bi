@@ -13,7 +13,7 @@
   "agents": {
     "schema_linking": {
       "inputs": ["question", "iteration", "schema_status", "schema_refresh_count", "relevant_tables", "review_issues", "error", "error_history", "schema_context_metrics", "llm_stage_calls"],
-      "outputs": ["relevant_tables", "relevant_columns", "schema_status", "schema_reasoning", "schema_refresh_count", "schema_context_metrics", "llm_stage_calls", "terminal_reason", "error", "error_source", "error_history"],
+      "outputs": ["relevant_tables", "relevant_columns", "schema_status", "schema_reasoning", "schema_refresh_count", "schema_context_metrics", "llm_stage_calls", "terminal_reason", "error", "error_source", "error_history", "request_status", "request_message"],
       "tools": ["get_catalog_metrics", "get_db_overview", "list_tables", "get_table_columns", "llm"]
     },
     "sql_generation": {
