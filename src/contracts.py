@@ -26,6 +26,7 @@ ReviewIssueCode = Literal[
     "wrong_aggregation",
     "wrong_columns",
     "unsafe_sql",
+    "ambiguous_intent",
     "unanswerable",
     "other",
 ]

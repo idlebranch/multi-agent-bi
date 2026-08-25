@@ -78,6 +78,64 @@ class NodeLifecycleTests(unittest.TestCase):
         self.assertIn("not revenue", result["review_feedback"])
         self.assertEqual(result["review_issues"][0]["code"], "wrong_metric")
 
+    def test_ambiguous_reviewer_feedback_becomes_clarification(self) -> None:
+        state = create_initial_state("2016年未签收商品情况", as_of_date="2018-10-17")
+        state.update(
+            {
+                "relevant_tables": ["orders", "order_items"],
+                "schema_status": "succeeded",
+                "sql": "SELECT COUNT(*) FROM orders",
+                "sql_status": "succeeded",
+            }
+        )
+        message = (
+            "‘未签收’和‘商品情况’存在多种统计口径，请明确订单状态、签收时间，"
+            "以及订单数或商品件数。"
+        )
+        response = (
+            '{"approved":false,"summary":"需要澄清",'
+            '"issues":[{"code":"ambiguous_intent","severity":"high",'
+            '"message":"' + message + '"}]}'
+        )
+        with (
+            patch("src.nodes.sql_review.get_db_schema", return_value="schema"),
+            patch("src.nodes.sql_review.get_llm", return_value=FakeLLM(response)),
+        ):
+            result = sql_review_node(state)
+
+        self.assertEqual(result["request_status"], "clarification_required")
+        self.assertEqual(result["request_message"], message)
+        self.assertEqual(result["review_status"], "failed")
+        self.assertEqual(result["review_issues"][0]["code"], "ambiguous_intent")
+        self.assertNotIn("execution_status", result)
+
+    def test_unsafe_sql_takes_precedence_over_ambiguity_fallback(self) -> None:
+        state = create_initial_state("2016年未签收商品情况", as_of_date="2018-10-17")
+        state.update(
+            {
+                "relevant_tables": ["orders"],
+                "schema_status": "succeeded",
+                "sql": "SELECT COUNT(*) FROM orders",
+                "sql_status": "succeeded",
+            }
+        )
+        response = (
+            '{"approved":false,"summary":"拒绝", "issues":['
+            '{"code":"ambiguous_intent","severity":"high",'
+            '"message":"请澄清统计口径"},'
+            '{"code":"unsafe_sql","severity":"high",'
+            '"message":"检测到不安全 SQL"}]}'
+        )
+        with (
+            patch("src.nodes.sql_review.get_db_schema", return_value="schema"),
+            patch("src.nodes.sql_review.get_llm", return_value=FakeLLM(response)),
+        ):
+            result = sql_review_node(state)
+
+        self.assertEqual(result["review_status"], "failed")
+        self.assertNotIn("request_status", result)
+        self.assertEqual(result["review_issues"][0]["code"], "ambiguous_intent")
+
     def test_hard_semantic_review_overrides_llm_approval(self) -> None:
         state = create_initial_state(
             "已签收 GMV 最高的五个商品类别是什么？",
