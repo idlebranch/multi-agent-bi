@@ -125,10 +125,7 @@ def _compact_trace(trace: list[dict], max_chars: int = 1200) -> list[dict]:
             if key in {"node", "node_timings"}:
                 continue
             safe_value = sanitize_public_value(value, max_chars=max_chars)
-            rendered = str(safe_value)
-            cleaned[key] = (
-                safe_value if len(rendered) <= max_chars else rendered[:max_chars] + "..."
-            )
+            cleaned[key] = safe_value
         compact.append(cleaned)
     return compact
 

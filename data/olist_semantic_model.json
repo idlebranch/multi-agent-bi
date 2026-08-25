@@ -1,5 +1,9 @@
 {
   "dataset": "Olist Brazilian E-Commerce",
+  "date_coverage": {
+    "start": "2016-09-04",
+    "end": "2018-10-17"
+  },
   "tables": {
     "customers": {
       "description": "订单级客户记录；跨订单识别同一消费者必须使用 customer_unique_id，而不是 customer_id",
@@ -71,6 +75,7 @@
     "freight_value": "SUM(order_items.freight_value)",
     "average_order_value": "delivered_gmv / COUNT(DISTINCT delivered order_id)",
     "on_time_delivery_rate": "百分比口径，直接使用 delivery_kpis.on_time_delivery_pct；等价于 AVG(order_delivery_metrics.delivered_on_time) * 100，忽略 NULL",
-    "repeat_customer": "全部订单口径，统计 customer_order_summary.order_count >= 2 的消费者；除非用户明确要求，否则不加状态或日期过滤"
+    "repeat_customer": "全部订单口径，统计 customer_order_summary.order_count >= 2 的消费者；除非用户明确要求，否则不加状态或日期过滤",
+    "undelivered": "未签收/未送达订单：orders.delivered_customer_timestamp IS NULL 且 orders.status NOT IN ('canceled','unavailable')；订单级概念，使用 orders 表，不要用 status != 'delivered'"
   }
 }

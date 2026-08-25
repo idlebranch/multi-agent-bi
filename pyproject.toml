@@ -1,7 +1,7 @@
 [project]
-name = "bi-agent-test"
+name = "multi-agent-bi"
 version = "0.1.0"
-description = "Supervisor-orchestrated multi-agent BI query workflow"
+description = "Production-oriented multi-agent BI workflow for governed PostgreSQL text-to-SQL"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

@@ -161,7 +161,7 @@ wheels = [
 ]
 
 [[package]]
-name = "bi-agent-test"
+name = "multi-agent-bi"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

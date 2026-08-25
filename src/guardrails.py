@@ -7,6 +7,11 @@ import re
 import unicodedata
 from typing import Any, Sequence
 
+from src.semantic_rules import (
+    question_time_range_entirely_before_start,
+    undelivered_metric_is_ambiguous,
+)
+
 
 _RISK_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
@@ -40,10 +45,10 @@ _RISK_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         re.compile(
             r"\b(?:insert|update|delete|drop|alter|create|attach|detach|pragma|"
             r"replace|truncate|vacuum|reindex|grant|revoke|copy|call|execute|set)\b|"
-            r"(?:删除|删掉|清空|更新|插入|新增|创建|建表|删表|修改|授予|撤销).{0,24}"
-            r"(?:数据库|数据表|表结构|记录|权限|(?:[\w.]+\s*)?表)|"
+            r"(?<!已)(?:删除|删掉|清空|更新|插入|新增|创建|建表|删表|修改|授予|撤销).{0,24}"
+            r"(?:数据库|数据表|表结构|记录|权限|订单|客户|商品|产品|支付|评价|评论|卖家|(?:[\w.]+\s*)?表)|"
             r"(?:数据库|数据表|表结构|记录|权限|(?:[\w.]+\s*)?表).{0,24}"
-            r"(?:删除|删掉|清空|更新|插入|新增|修改|授予|撤销)",
+            r"(?<!已)(?:删除|删掉|清空|更新|插入|新增|修改|授予|撤销)",
             re.IGNORECASE,
         ),
     ),
@@ -188,6 +193,30 @@ def classify_business_question(question: str) -> dict[str, Any]:
             "clarification_options": [],
         }
 
+    customer_terms = ("客户", "消费者", "用户", "customer", "consumer")
+    demographic_terms = (
+        "收入",
+        "收入水平",
+        "年龄",
+        "性别",
+        "职业",
+        "income",
+        "age",
+        "gender",
+        "occupation",
+    )
+    if any(term in value for term in customer_terms) and any(
+        term in value for term in demographic_terms
+    ):
+        return {
+            "request_status": "out_of_scope",
+            "request_message": (
+                "当前 Olist 数据库没有客户个人收入/年龄/性别/职业等人口画像字段，"
+                "因此无法可靠回答。"
+            ),
+            "clarification_options": [],
+        }
+
     china_region_terms = (
         "华东",
         "华南",
@@ -207,6 +236,29 @@ def classify_business_question(question: str) -> dict[str, Any]:
                 "例如 SP、RJ 或 MG。"
             ),
             "clarification_options": [],
+        }
+
+    if question_time_range_entirely_before_start(value):
+        return {
+            "request_status": "out_of_scope",
+            "request_message": (
+                "当前数据集从 2016-09-04 开始，请求的时间范围没有数据。"
+            ),
+            "clarification_options": [],
+        }
+
+    if undelivered_metric_is_ambiguous(value):
+        return {
+            "request_status": "clarification_required",
+            "request_message": (
+                "“未签收/未送达”是订单级状态，而“商品情况”的统计口径不明确。"
+                "请明确要统计：未签收订单数、未签收商品件数，还是未签收商品金额。"
+            ),
+            "clarification_options": [
+                {"label": "按订单数", "question": "未签收订单数量是多少？"},
+                {"label": "按商品件数", "question": "未签收商品件数是多少？"},
+                {"label": "按商品金额", "question": "未签收商品金额是多少？"},
+            ],
         }
 
     return {

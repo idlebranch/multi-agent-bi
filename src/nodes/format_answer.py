@@ -15,7 +15,7 @@ from src.guardrails import (
 from src.numerical_faithfulness import enforce_numerical_faithfulness
 from src.observability import invoke_llm_observed
 from src.policy import require_tool
-from src.semantic_rules import question_uses_relative_time
+from src.semantic_rules import partial_date_coverage_note, question_uses_relative_time
 from src.state import BIAgentState
 
 
@@ -68,6 +68,13 @@ def _anchor_relative_answer(answer: str, state: BIAgentState) -> str:
         and as_of_date not in answer
     ):
         return f"以下时间范围以数据库最新业务日期 {as_of_date} 为基准。\n\n{answer}"
+    return answer
+
+
+def _anchor_partial_coverage(answer: str, state: BIAgentState) -> str:
+    note = partial_date_coverage_note(str(state.get("question", "")))
+    if note and note not in answer:
+        return f"{note}\n\n{answer}"
     return answer
 
 
@@ -142,7 +149,9 @@ Result truncated: {state.get('result_truncated', False)}
             result,
         )
         return {
-            "final_answer": _anchor_relative_answer(faithful_answer, state),
+            "final_answer": _anchor_partial_coverage(
+                _anchor_relative_answer(faithful_answer, state), state
+            ),
             "response_status": "success",
             "llm_stage_calls": llm_stage_calls,
             "numerical_faithfulness": numerical_faithfulness,
