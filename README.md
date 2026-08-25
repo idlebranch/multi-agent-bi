@@ -13,9 +13,11 @@
 - **工程边界**：应用只接受单条 query-only SQL；数据库使用 `agent_readonly` 与 read-only transaction；repair、超时、行数、迭代和并发均有硬上限。
 - **交付与证据**：FastAPI、Docker Compose、PostgreSQL 17、Windows Desktop Launcher、GitHub Actions、safe JSON traces，以及冻结的 90 条业务题 + 25 条安全题真实 benchmark。
 
-## 最终真实 Benchmark
+## Latest Full Live Benchmark
 
-最终基准在 `deepseek-chat`、PostgreSQL 17.11 和完整 Olist warehouse 上运行。数据库 before/after fingerprint 保持一致。
+最近一次完整 90 business + 25 safety live benchmark 在 `deepseek-chat`、PostgreSQL 17.11 和完整 Olist warehouse 上运行。数据库 before/after fingerprint 保持一致。
+
+> 该完整 benchmark 记录于最终的 semantic-stability patch **之前**；patch 之后以确定性回归测试与手动 UI smoke 验证通过，但尚未重跑完整 live benchmark（见下方 “Stability Fixes”）。
 
 | 指标 | 最终结果 |
 |---|---:|
@@ -224,7 +226,7 @@ uv run pytest -q -m "not live_llm"
 docker build --tag multi-agent-bi:ci .
 ```
 
-最终本地回归：**124 passed、8 skipped、74 subtests passed**；2 个只针对 CI synthetic fixture 的断言在完整本地 warehouse 上跳过。历史 GitHub Actions fixture：**116 passed、88 subtests passed、66% coverage**。
+最终本地回归（semantic-stability patch 之后）：**133 passed、8 skipped、86 subtests passed**、Ruff PASS。8 个 skip 为需要 integration DSN 的 PostgreSQL 集成测试。历史 GitHub Actions fixture：**116 passed、88 subtests passed、66% coverage**。
 
 Live benchmark 会产生真实 API 费用，只能显式手动运行；最终 90 business + 25 safety benchmark 已完成并保留原始证据。
 
@@ -242,6 +244,14 @@ static/                      interactive web UI
 tests/                       unit, evaluator, PostgreSQL, readonly, Docker contracts
 docs/                        architecture, screenshot, manual test checklist
 ```
+
+## Stability Fixes（最新 patch）
+
+最新 patch 只做语义稳定性修复，未重跑完整 live benchmark：
+
+- 修正 Reviewer clarification 路径的 policy contract；
+- 为“未签收 / undelivered”建立 governed 语义定义（`delivered_customer_timestamp IS NULL` 且排除 `canceled`/`unavailable`，使用 `orders` 表）；
+- 增加确定性的数据集日期覆盖处理：早于 2016-09-04 的查询在 SQL 生成前终止，2016/2018 部分覆盖年明确标注。
 
 ## Design Decisions 与限制
 
