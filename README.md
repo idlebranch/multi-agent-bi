@@ -21,9 +21,9 @@
 |---|---:|
 | Business cases | **90** |
 | Safety cases | **25** |
-| Execution Accuracy | **89.41% (76/85)** |
+| Execution Accuracy | **90.59% (77/85)** |
 | Answer Accuracy | **90.00% (81/90)** |
-| End-to-End Accuracy | **87.78% (79/90)** |
+| End-to-End Accuracy | **88.89% (80/90)** |
 | Safety Blocking Rate | **100.00% (25/25)** |
 | Unsafe case DB execution calls | **0** |
 
@@ -109,29 +109,29 @@ flowchart TB
 
 | 难度 | EX | E2E |
 |---|---:|---:|
-| Easy | 92.31% (24/26) | 88.89% (24/27) |
-| Medium | 91.43% (32/35) | 89.47% (34/38) |
-| Hard | 83.33% (20/24) | 84.00% (21/25) |
+| Easy | 92.31% (24/26) | 92.59% (25/27) |
+| Medium | 91.43% (32/35) | 86.84% (33/38) |
+| Hard | 87.50% (21/24) | 88.00% (22/25) |
 
 按类别：
 
 | 类别 | EX | E2E |
 |---|---:|---:|
-| Single-table aggregation | 90.91% | 81.82% |
+| Single-table aggregation | 90.91% | 90.91% |
 | Filtering / sorting | 90.00% | 90.00% |
-| Multi-table join | 87.50% | 87.50% |
+| Multi-table join | 81.25% | 81.25% |
 | Time series | 90.00% | 90.00% |
-| Time window | 75.00% | 75.00% |
+| Time window | 87.50% | 75.00% |
 | Governed metric | 100.00% | 100.00% |
 | Ratio metric | 87.50% | 87.50% |
-| Complex filter | 85.71% | 85.71% |
+| Complex filter | 100.00% | 100.00% |
 | Ambiguity | N/A | 66.67% |
 | Empty result | 100.00% | 100.00% |
 | Out of domain | N/A | 100.00% |
 
 可信证据保留在仓库中：
 
-- [最终 benchmark 摘要](benchmarks/results/final_benchmark_20260824.md) / [原始 JSON](benchmarks/results/final_benchmark_20260824.json)：Easy/Medium/Hard、类别指标、failure taxonomy、延迟、repair、Reviewer、token usage 与数据库指纹；
+- [最终 benchmark 摘要](benchmarks/results/final_benchmark_20260825.md) / [原始 JSON](benchmarks/results/final_benchmark_20260825.json)：Easy/Medium/Hard、类别指标、failure taxonomy、延迟、repair、Reviewer、token usage 与数据库指纹；
 - [SQLite baseline → PostgreSQL final](benchmarks/results/baseline_to_final_20260824.md)：迁移前后对比；
 - [独立 holdout](benchmarks/results/holdout_results_20260824.md)：Safety 12/12、Numerical 6/6、Representation 5/5；
 - [audited historical baseline](benchmarks/results/benchmark_baseline_20260824_audited.json)：保留历史可追溯性；
@@ -158,7 +158,7 @@ flowchart TB
 | configured limit = 4 | 12 | 12 | 0 | 54.63 req/s | 133.84 ms | 217.15 ms | 4 |
 | above limit | 12 | 4 | 8 | 32.42 req/s | 105.46 ms | 369.51 ms | 4 |
 
-完整 115-case live benchmark：平均延迟 3.765 s，P50 3.925 s，P95 10.559 s，最大值 14.280 s；平均 repair count 0.20，Reviewer rejection rate 22.12% (23/104)。数据库 before/after fingerprint unchanged。
+完整 90 business + 25 safety live benchmark：平均延迟 3.145 s，P50 3.402 s，P95 8.555 s，最大值 11.693 s；平均 repair count 0.1667，Reviewer rejection rate 17.82% (18/101)。333 个 LLM stage calls，provider-reported total tokens 373,259；数据库 before/after fingerprint unchanged。
 
 每个请求的 safe JSON trace 可关联 `request_id`、`run_id`、节点时延、路由、Reviewer 决策、repair、validation/execution 状态、返回行数、截断、错误码和总时延。
 
@@ -224,9 +224,9 @@ uv run pytest -q -m "not live_llm"
 docker build --tag multi-agent-bi:ci .
 ```
 
-最终本地回归：**114 passed、72 subtests passed**；2 个只针对 CI synthetic fixture 的断言在完整本地 warehouse 上跳过。最终 GitHub Actions fixture：**116 passed、88 subtests passed、66% coverage**。
+最终本地回归：**124 passed、8 skipped、74 subtests passed**；2 个只针对 CI synthetic fixture 的断言在完整本地 warehouse 上跳过。历史 GitHub Actions fixture：**116 passed、88 subtests passed、66% coverage**。
 
-Live benchmark 会产生真实 API 费用，只能显式手动运行，本轮作品集整理未重新执行。
+Live benchmark 会产生真实 API 费用，只能显式手动运行；最终 90 business + 25 safety benchmark 已完成并保留原始证据。
 
 ## Repository Structure
 
@@ -250,7 +250,7 @@ docs/                        architecture, screenshot, manual test checklist
 - 使用标准 JSON logging 和显式 state metrics，不虚构尚未接入的可观测平台。
 - Token 只使用 provider-reported usage；拿不到就标记 unavailable。
 - Benchmark 比较执行结果而非 SQL 字符串，并保留 gold value、重复行、numeric tolerance 和显式 representation override。
-- Final E2E 为 87.78%；time-window、复杂口径和少数 join 仍是主要失败来源。
+- Final E2E 为 88.89%；time-window、复杂口径和少数 join 仍是主要失败来源。
 - Schema/SQL/Review/Answer 依赖 DeepSeek 可用性、速率限制和付费额度。
 - 并发控制是单进程 semaphore，不是跨实例分布式容量协调。
 - 数据只覆盖截至 2018-10-17 的 Olist 历史快照，不是实时业务系统。
