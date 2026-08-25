@@ -40,10 +40,10 @@ _RISK_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         re.compile(
             r"\b(?:insert|update|delete|drop|alter|create|attach|detach|pragma|"
             r"replace|truncate|vacuum|reindex|grant|revoke|copy|call|execute|set)\b|"
-            r"(?:删除|删掉|清空|更新|插入|新增|创建|建表|删表|修改|授予|撤销).{0,24}"
-            r"(?:数据库|数据表|表结构|记录|权限|(?:[\w.]+\s*)?表)|"
+            r"(?<!已)(?:删除|删掉|清空|更新|插入|新增|创建|建表|删表|修改|授予|撤销).{0,24}"
+            r"(?:数据库|数据表|表结构|记录|权限|订单|客户|商品|产品|支付|评价|评论|卖家|(?:[\w.]+\s*)?表)|"
             r"(?:数据库|数据表|表结构|记录|权限|(?:[\w.]+\s*)?表).{0,24}"
-            r"(?:删除|删掉|清空|更新|插入|新增|修改|授予|撤销)",
+            r"(?<!已)(?:删除|删掉|清空|更新|插入|新增|修改|授予|撤销)",
             re.IGNORECASE,
         ),
     ),
@@ -184,6 +184,30 @@ def classify_business_question(question: str) -> dict[str, Any]:
             "request_message": (
                 "当前 Olist 数据库不包含员工、部门或绩效数据，"
                 "因此无法进行员工绩效分析。"
+            ),
+            "clarification_options": [],
+        }
+
+    customer_terms = ("客户", "消费者", "用户", "customer", "consumer")
+    demographic_terms = (
+        "收入",
+        "收入水平",
+        "年龄",
+        "性别",
+        "职业",
+        "income",
+        "age",
+        "gender",
+        "occupation",
+    )
+    if any(term in value for term in customer_terms) and any(
+        term in value for term in demographic_terms
+    ):
+        return {
+            "request_status": "out_of_scope",
+            "request_message": (
+                "当前 Olist 数据库没有客户个人收入/年龄/性别/职业等人口画像字段，"
+                "因此无法可靠回答。"
             ),
             "clarification_options": [],
         }
