@@ -23,7 +23,7 @@
     },
     "sql_review": {
       "inputs": ["question", "as_of_date", "relevant_tables", "sql", "iteration", "error_history", "llm_stage_calls"],
-      "outputs": ["review_status", "review_feedback", "review_issues", "request_status", "request_message", "llm_stage_calls", "error", "error_source", "error_history"],
+      "outputs": ["review_status", "review_feedback", "review_issues", "request_status", "request_message", "terminal_reason", "llm_stage_calls", "error", "error_source", "error_history"],
       "tools": ["get_db_schema", "llm"]
     },
     "sql_validation": {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import date
 from collections.abc import Iterable
@@ -81,6 +82,13 @@ _GUIDANCE: dict[MetricName, str] = {
         "Use customer_order_summary, keep delivered_order_count >= 1, and calculate "
         "the percentile from delivered_gmv. In PostgreSQL use CUME_DIST or an explicitly "
         "defined rank; NTILE(100) is not the 99th-percentile threshold."
+    ),
+    "undelivered": (
+        "Use the orders table. An undelivered (未签收) order is one whose "
+        "delivered_customer_timestamp IS NULL AND whose status is NOT IN "
+        "('canceled', 'unavailable'). Do not use a bare status != 'delivered' filter, "
+        "because it incorrectly includes canceled and unavailable orders. Do not use "
+        "order_financials, which lacks delivered_customer_timestamp."
     ),
 }
 
@@ -167,15 +175,82 @@ def identify_metric(question: str) -> MetricName | None:
         and _contains_any(value, ("gmv", "销售额", "成交额", "revenue"))
     ):
         return "top_seller_state_gmv"
+    if question_requests_undelivered_scope(question):
+        return "undelivered"
     return None
+
+
+UNDELIVERED_TERMS = (
+    "未签收",
+    "未送达",
+    "尚未送达",
+    "尚未签收",
+    "没有送达",
+    "没有签收",
+    "not delivered",
+    "undelivered",
+)
+
+_EXPLICIT_STATUS_CONDITION = re.compile(
+    r"\bstatus\s*(?:!=|<>|=|==)\s*['\"]?[a-z_0-9]", re.IGNORECASE
+)
+
+
+def _has_explicit_status_condition(value: str) -> bool:
+    """Detect an explicit SQL-style status filter the user typed verbatim."""
+    return bool(_EXPLICIT_STATUS_CONDITION.search(value))
 
 
 def question_requests_delivered_scope(question: str) -> bool:
     value = question.casefold()
+    if _contains_any(value, UNDELIVERED_TERMS):
+        return False
     return _contains_any(
         value,
         ("已签收", "已交付", "已送达", "delivered", "completed orders"),
     )
+
+
+def question_requests_undelivered_scope(question: str) -> bool:
+    """True when the user asks about the governed undelivered concept.
+
+    An explicit SQL-style status condition (e.g. ``status != 'delivered'``)
+    always wins over the default semantic interpretation, so it is excluded.
+    """
+    value = question.casefold()
+    if not _contains_any(value, UNDELIVERED_TERMS):
+        return False
+    return not _has_explicit_status_condition(value)
+
+
+def undelivered_metric_is_ambiguous(question: str) -> bool:
+    """Undelivered scope with a vague product-overview wording needs clarification."""
+    if not question_requests_undelivered_scope(question):
+        return False
+    value = question.casefold()
+    if not _contains_any(value, ("情况", "状况", "概览", "overview", "situation", "summary")):
+        return False
+    if not _contains_any(value, ("商品", "产品", "product", "item")):
+        return False
+    clear_metric = _contains_any(
+        value,
+        (
+            "订单数",
+            "订单数量",
+            "订单量",
+            "件数",
+            "数量",
+            "金额",
+            "销售额",
+            "gmv",
+            "单价",
+            "价格",
+            "count",
+            "revenue",
+            "value",
+        ),
+    )
+    return not clear_metric
 
 
 def question_requests_time_scope(question: str) -> bool:
@@ -251,6 +326,57 @@ def question_requests_seller_state(question: str) -> bool:
     )
 
 
+_DATE_COVERAGE_FALLBACK = {"start": "2016-09-04", "end": "2018-10-17"}
+
+
+def get_date_coverage() -> dict[str, str]:
+    """Return the single source-of-truth dataset date coverage metadata."""
+    try:
+        from src.config import DEFAULT_SEMANTIC_MODEL
+
+        payload = json.loads(DEFAULT_SEMANTIC_MODEL.read_text(encoding="utf-8"))
+        coverage = payload.get("date_coverage")
+        if (
+            isinstance(coverage, dict)
+            and coverage.get("start")
+            and coverage.get("end")
+        ):
+            return {"start": str(coverage["start"]), "end": str(coverage["end"])}
+    except (OSError, ValueError, json.JSONDecodeError):
+        pass
+    return dict(_DATE_COVERAGE_FALLBACK)
+
+
+def _extract_years(question: str) -> list[int]:
+    return [
+        int(match.group(1))
+        for match in re.finditer(r"(?<![\d])((?:19|20)\d{2})(?![\d])", question)
+    ]
+
+
+def question_time_range_entirely_before_start(question: str) -> bool:
+    """True when every referenced year precedes the dataset start year."""
+    years = _extract_years(question)
+    if not years:
+        return False
+    start_year = date.fromisoformat(get_date_coverage()["start"]).year
+    return max(years) < start_year
+
+
+def partial_date_coverage_note(question: str) -> str:
+    """Return a deterministic note when the question references a partial year."""
+    coverage = get_date_coverage()
+    start_year = date.fromisoformat(coverage["start"]).year
+    end_year = date.fromisoformat(coverage["end"]).year
+    years = set(_extract_years(question))
+    notes = []
+    if start_year in years:
+        notes.append(f"{start_year} 年数据仅从 {coverage['start']} 开始。")
+    if end_year in years:
+        notes.append(f"数据截至 {coverage['end']}。")
+    return " ".join(notes)
+
+
 def get_metric_guidance(question: str) -> str:
     metric = identify_metric(question)
     if metric is None:
@@ -292,6 +418,8 @@ def preferred_tables_for_question(question: str) -> list[str]:
         return ["order_delivery_metrics", "reviews"]
     if metric == "delivered_customer_gmv_percentile":
         return ["customer_order_summary"]
+    if metric == "undelivered":
+        return ["orders"]
     return []
 
 
@@ -620,6 +748,21 @@ def review_sql_semantics(question: str, sql: str) -> list[ReviewIssue]:
                 )
             )
 
+    elif metric == "undelivered":
+        if (
+            re.search(r"\b(?:order_)?status\s*(?:!=|<>)\s*['\"]?delivered['\"]?", value)
+            and "delivered_customer_timestamp is null" not in value
+        ):
+            issues.append(
+                _issue(
+                    "wrong_metric",
+                    "未签收（undelivered）的 governed 定义是 "
+                    "delivered_customer_timestamp IS NULL 且 "
+                    "status NOT IN ('canceled','unavailable')；不要使用 "
+                    "status != 'delivered'，否则会把 canceled/unavailable 错误计入。",
+                )
+            )
+
     return issues
 
 
@@ -629,6 +772,8 @@ def _status_filter_is_not_required(metric: MetricName, sql: str, question: str) 
         return "delivery_kpis" in value or "order_delivery_metrics" in value
     if metric in {"payment_value_by_type", "repeat_customers"}:
         return not question_requests_delivered_scope(question)
+    if metric == "undelivered":
+        return "delivered_customer_timestamp is null" in value
     return False
 
 
