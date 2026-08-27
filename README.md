@@ -17,19 +17,20 @@
 
 最近一次完整 90 business + 25 safety live benchmark 在 `deepseek-chat`、PostgreSQL 17.11 和完整 Olist warehouse 上运行。数据库 before/after fingerprint 保持一致。
 
-> 该完整 benchmark 记录于最终的 semantic-stability patch **之前**；patch 之后以确定性回归测试与手动 UI smoke 验证通过，但尚未重跑完整 live benchmark（见下方 “Stability Fixes”）。
-
 | 指标 | 最终结果 |
 |---|---:|
 | Business cases | **90** |
 | Safety cases | **25** |
-| Execution Accuracy | **90.59% (77/85)** |
-| Answer Accuracy | **90.00% (81/90)** |
-| End-to-End Accuracy | **88.89% (80/90)** |
+| Execution Accuracy | **91.76% (78/85)** |
+| Answer Accuracy | **91.11% (82/90)** |
+| End-to-End Accuracy | **90.00% (81/90)** |
 | Safety Blocking Rate | **100.00% (25/25)** |
 | Unsafe case DB execution calls | **0** |
+| System failures | **0** |
 
-Execution Accuracy is computed over the 85 cases with executable SQL targets; ambiguity and out-of-domain cases are evaluated at the answer/E2E level.
+Execution Accuracy is computed over the 85 cases with executable SQL targets; ambiguity and out-of-domain cases are evaluated at the answer/E2E level. 证据位于 `benchmarks/results/benchmark_baseline_20260827T154133Z.{json,md}`。
+
+> 早期（semantic-intent upgrade 之前）的一次完整 benchmark 记录为 EX 90.59% / Answer 90.00% / E2E 88.89% / Safety 100%，作为历史证据保留于 `benchmarks/results/final_benchmark_20260825.{json,md}`。
 
 ![Multi-Agent BI execution workspace](docs/production_ui.png)
 
@@ -98,6 +99,12 @@ flowchart TB
 
 系统没有把目录选择、SQL 写入、业务口径审核、确定性安全验证、数据库执行和回答生成塞进一次模型调用。Supervisor 是不调用 LLM 的确定性路由器；Reviewer 可以在有限预算内把明确问题交回 SQL Writer，最多生成 3 个 SQL 候选。每个节点的输入、输出、工具和路由都受 policy 约束。
 
+按实现准确区分三层（并非每层都是 Agent）：
+
+- **deterministic processing layer**（无 LLM）：Structured Intent / Semantic Resolution / Clarification Gate / Governed Query Plan（`src/intent.py`、`src/query_plan.py`）、SQL Validator、Supervisor/Router、Result Analysis（`src/analysis.py`）。
+- **LLM-powered nodes**：Schema Linking（有 deterministic 快路径）、SQL Writer、SQL Reviewer、Answer Formatter。
+- **LangGraph node**：`src/graph.py` 中的正式编排节点（supervisor + 6 个 stage node）。
+
 可验证的职责边界包括：
 
 - SQL Reviewer 不执行查询，Executor 不生成 SQL；
@@ -112,29 +119,29 @@ flowchart TB
 | 难度 | EX | E2E |
 |---|---:|---:|
 | Easy | 92.31% (24/26) | 92.59% (25/27) |
-| Medium | 91.43% (32/35) | 86.84% (33/38) |
+| Medium | 94.29% (33/35) | 89.47% (34/38) |
 | Hard | 87.50% (21/24) | 88.00% (22/25) |
 
 按类别：
 
 | 类别 | EX | E2E |
 |---|---:|---:|
-| Single-table aggregation | 90.91% | 90.91% |
-| Filtering / sorting | 90.00% | 90.00% |
-| Multi-table join | 81.25% | 81.25% |
-| Time series | 90.00% | 90.00% |
-| Time window | 87.50% | 75.00% |
+| Single-table aggregation | 100.00% | 100.00% |
+| Filtering / sorting | 80.00% | 80.00% |
+| Multi-table join | 87.50% | 87.50% |
+| Time series | 100.00% | 100.00% |
+| Time window | 100.00% | 87.50% |
 | Governed metric | 100.00% | 100.00% |
-| Ratio metric | 87.50% | 87.50% |
-| Complex filter | 100.00% | 100.00% |
-| Ambiguity | N/A | 66.67% |
+| Ratio metric | 100.00% | 87.50% |
+| Complex filter | 57.14% | 57.14% |
+| Ambiguity | N/A | 100.00% |
 | Empty result | 100.00% | 100.00% |
 | Out of domain | N/A | 100.00% |
 
 可信证据保留在仓库中：
 
-- [最终 benchmark 摘要](benchmarks/results/final_benchmark_20260825.md) / [原始 JSON](benchmarks/results/final_benchmark_20260825.json)：Easy/Medium/Hard、类别指标、failure taxonomy、延迟、repair、Reviewer、token usage 与数据库指纹；
-- [SQLite baseline → PostgreSQL final](benchmarks/results/baseline_to_final_20260824.md)：迁移前后对比；
+- [最终 benchmark 摘要](benchmarks/results/benchmark_baseline_20260827T154133Z.md) / [原始 JSON](benchmarks/results/benchmark_baseline_20260827T154133Z.json)：Easy/Medium/Hard、类别指标、failure taxonomy、延迟、repair、Reviewer、token usage 与数据库指纹；
+- [历史 baseline（semantic-intent 之前）](benchmarks/results/final_benchmark_20260825.md)：迁移前后与早期口径的历史证据；
 - [独立 holdout](benchmarks/results/holdout_results_20260824.md)：Safety 12/12、Numerical 6/6、Representation 5/5；
 - [audited historical baseline](benchmarks/results/benchmark_baseline_20260824_audited.json)：保留历史可追溯性；
 - [final reliability report](benchmarks/results/final_reliability_20260824.md)：并发与 capacity behavior。
@@ -160,19 +167,9 @@ flowchart TB
 | configured limit = 4 | 12 | 12 | 0 | 54.63 req/s | 133.84 ms | 217.15 ms | 4 |
 | above limit | 12 | 4 | 8 | 32.42 req/s | 105.46 ms | 369.51 ms | 4 |
 
-完整 90 business + 25 safety live benchmark：平均延迟 3.145 s，P50 3.402 s，P95 8.555 s，最大值 11.693 s；平均 repair count 0.1667，Reviewer rejection rate 17.82% (18/101)。333 个 LLM stage calls，provider-reported total tokens 373,259；数据库 before/after fingerprint unchanged。
+完整 90 business + 25 safety live benchmark：平均延迟 3.907 s，P50 4.009 s，P95 9.601 s，最大值 12.556 s；平均 repair count 0.2111，Reviewer rejection rate 20.19% (21/104)。325 个 LLM stage calls，provider-reported total tokens 439,074；数据库 before/after fingerprint unchanged。
 
-每个请求的 safe JSON trace 可关联 `request_id`、`run_id`、节点时延、路由、Reviewer 决策、repair、validation/execution 状态、返回行数、截断、错误码和总时延。
-
-85 条查询题每次均可看到 16 张表/视图、104 个字段；Schema Linking 平均选择 **1.153 张表、4.494 个字段**，传给 SQL Writer 的 selected schema context 平均为 **1,987.506 characters**。字符数来自实际 workflow state，不伪装为 token。
-
-最终运行的 344 次 workflow stage invoke 均返回 provider-reported usage：
-
-- prompt tokens：350,464；completion tokens：30,757；total tokens：381,221；
-- query-only tokens：369,073；average total tokens/query case：4,342.035；
-- average LLM stage calls/query case：3.9412 (335/85)；
-- stage calls：Schema Linking 57、SQL Writer 104、Review 105、Answer 78；18 次 repair 是 SQL Writer calls 的子集；
-- Planner/Router LLM calls：0。
+每个请求的 safe JSON trace 可关联 `request_id`、`run_id`、节点时延、路由、Reviewer 决策、repair、validation/execution 状态、返回行数、截断、错误码和总时延。Planner/Router LLM calls 恒为 0（路由为确定性 policy-coded）。
 
 Stage invoke 不等于 provider HTTP request count；SDK 内部 retry 的精确 HTTP 数量不可用，因此明确标记为 unavailable。
 
@@ -226,7 +223,7 @@ uv run pytest -q -m "not live_llm"
 docker build --tag multi-agent-bi:ci .
 ```
 
-最终本地回归（semantic-stability patch 之后）：**133 passed、8 skipped、86 subtests passed**、Ruff PASS。8 个 skip 为需要 integration DSN 的 PostgreSQL 集成测试。历史 GitHub Actions fixture：**116 passed、88 subtests passed、66% coverage**。
+最终本地回归：**186 passed、8 skipped、101 subtests passed**、Ruff PASS。8 个 skip 为需要 integration DSN 的 PostgreSQL 集成测试。历史 GitHub Actions fixture：**116 passed、88 subtests passed、66% coverage**。
 
 Live benchmark 会产生真实 API 费用，只能显式手动运行；最终 90 business + 25 safety benchmark 已完成并保留原始证据。
 
@@ -245,13 +242,30 @@ tests/                       unit, evaluator, PostgreSQL, readonly, Docker contr
 docs/                        architecture, screenshot, manual test checklist
 ```
 
-## Stability Fixes（最新 patch）
+## Hybrid Semantic Layer
 
-最新 patch 只做语义稳定性修复，未重跑完整 live benchmark：
+系统在 LangGraph workflow 之前增加了一层 **deterministic BI-domain 语义处理**，把自然语言解析与 SQL 生成解耦：
 
-- 修正 Reviewer clarification 路径的 policy contract；
-- 为“未签收 / undelivered”建立 governed 语义定义（`delivered_customer_timestamp IS NULL` 且排除 `canceled`/`unavailable`，使用 `orders` 表）；
-- 增加确定性的数据集日期覆盖处理：早于 2016-09-04 的查询在 SQL 生成前终止，2016/2018 部分覆盖年明确标注。
+- **Structured Intent**（`src/intent.py`）：规则/词法的 BI-domain intent parser，确定性解析时间表达、ranking、negation、governed concepts、explicit filters、dimension aliases、distribution/trend intent。**不是** general-purpose NLU。
+- **Semantic Coverage**（HIGH / PARTIAL / LOW）：HIGH 时 `Governed Query Plan`（`src/query_plan.py`）authoritative；PARTIAL 只使用已确认 constraints + metric guidance；LOW 回退到原有 LLM Schema Linking → Writer → Reviewer pipeline。
+- **Clarification Gate**：`parser uncertainty != user ambiguity`。只有真实业务歧义才 clarification；parser 覆盖不足则 fallback，而非误澄清。
+
+Query Plan 可表达 metric / aggregation / dimensions / filters（AND/OR/NOT）/ time scope / grain / boundaries / ordering / limit / governed concepts；temporal planning 支持 year / quarter / half-year / month，统一使用 half-open `[start, end)` 边界。
+
+## Result Analysis
+
+Executor 返回数据后进入 **deterministic Result Analysis Layer**（`src/analysis.py`），当前支持 SUMMARY / TREND / RANKING / COMPARISON / COMPOSITION / CHANGE。关键统计由 deterministic Python 计算为 `analysis_facts`，Answer Formatter 据此生成中文，而不是让 LLM 重新心算关键数字。系统只描述可观察模式，**不做 causal inference**；数据库无法证明的因果关系会明确标注为 limitation。
+
+## Demo Robustness Validation
+
+Self-built live robustness validation（**非 industry benchmark**）：
+
+- P0 regression：**7/7**
+- repeated real-agent stability：**100%**（5 题 × 3 次）
+- paraphrase challenge：**5/5**
+- system failures：**0**
+- wrong business answers：**0**
+- wrong clarification：**0**
 
 ## Design Decisions 与限制
 
@@ -260,8 +274,10 @@ docs/                        architecture, screenshot, manual test checklist
 - 使用标准 JSON logging 和显式 state metrics，不虚构尚未接入的可观测平台。
 - Token 只使用 provider-reported usage；拿不到就标记 unavailable。
 - Benchmark 比较执行结果而非 SQL 字符串，并保留 gold value、重复行、numeric tolerance 和显式 representation override。
-- Final E2E 为 88.89%；time-window、复杂口径和少数 join 仍是主要失败来源。
-- Schema/SQL/Review/Answer 依赖 DeepSeek 可用性、速率限制和付费额度。
+- Structured Intent 是 BI-domain 的 deterministic / lexical parser，不是 general-purpose NLU；极端 paraphrase 仍会 fallback 到 LLM pipeline。
+- 复杂多表 Join 仍存在 provider nondeterminism；单次完整 benchmark 无法保证完全复现。
+- benchmark 与 demo suite 均为 self-built，不是 industry / standard benchmark。
+- Schema/SQL/Review/Answer 依赖 DeepSeek 可用性、速率限制和付费额度；DeepSeek 本身存在 nondeterminism。
 - 并发控制是单进程 semaphore，不是跨实例分布式容量协调。
 - 数据只覆盖截至 2018-10-17 的 Olist 历史快照，不是实时业务系统。
 - 尚未进行正式云端部署、authentication、multi-tenant isolation 或 distributed capacity coordination；默认服务仅绑定本机端口。

@@ -8,11 +8,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
 from src.config import get_llm
-from src.contracts import ReviewIssue, SQLReviewResult
+from src.contracts import QueryPlan, ReviewIssue, SQLReviewResult
 from src.guardrails import untrusted_text_block
 from src.observability import invoke_llm_observed
 from src.policy import require_tool
 from src.semantic_rules import (
+    check_plan_consistency,
     get_metric_guidance,
     reconcile_llm_issues,
     review_sql_semantics,
@@ -25,10 +26,12 @@ SYSTEM_PROMPT = """You are an independent SQL reviewer for a BI system.
 Do not rewrite or execute the SQL. Check whether it correctly answers the user
 question using the supplied schema. Focus on join multiplicity, metric scope,
 status filters, aggregation, previous-calendar-month semantics, and selected
-columns. Reject any write/admin statement. The GOVERNED METRIC POLICY supplied
-with the request is authoritative. Do not invent a status or date filter that
-the user did not request, and remember that semantic views can already enforce
-a status scope.
+columns. Reject any write/admin statement. The GOVERNED METRIC POLICY and the
+GOVERNED QUERY PLAN supplied with the request are authoritative: do not re-flag
+semantics already resolved in the plan, such as location aliases mapped to
+state codes or explicit user status conditions. Do not invent a status or date
+filter that the user did not request, and remember that semantic views can
+already enforce a status scope.
 Use ambiguous_intent when the question itself has two or more reasonable
 business interpretations that materially change the metric, filtering
 semantics, counting unit, grouping/granularity, time scope, or join meaning.
@@ -87,6 +90,22 @@ def _parse_review_response(raw: str) -> SQLReviewResult:
     return SQLReviewResult.model_validate(payload)
 
 
+def _plan_has_resolved_filter(plan: QueryPlan) -> bool:
+    """True when the plan already carries a concrete, deterministic filter."""
+
+    def walk(node) -> bool:
+        if node is None:
+            return False
+        if node.field and node.op in {
+            "eq", "ne", "in", "not_in", "gt", "lt", "gte", "lte",
+            "is_null", "is_not_null", "between",
+        }:
+            return True
+        return any(walk(child) for child in node.children)
+
+    return walk(plan.filter_tree)
+
+
 def sql_review_node(state: BIAgentState) -> dict:
     llm_stage_calls = list(state.get("llm_stage_calls", []))
     sql = state.get("sql", "")
@@ -106,9 +125,22 @@ def sql_review_node(state: BIAgentState) -> dict:
             include_related=True,
             include_samples=False,
         )
+        coverage = (state.get("structured_intent") or {}).get("semantic_coverage", "low")
+        plan_block = ""
+        if coverage == "high":
+            plan_block = (
+                "\nGoverned query plan (authoritative; resolved tables, filters, grouping):\n"
+                + untrusted_text_block(
+                    'query_plan',
+                    json.dumps(state.get('query_plan', {}), ensure_ascii=False),
+                    max_chars=20_000,
+                )
+                + "\n"
+            )
         prompt = f"""{untrusted_text_block('user_question', state['question'], max_chars=2000)}
 Business as-of date: {state.get('as_of_date', '')}
 {get_metric_guidance(state['question'])}
+{plan_block}
 Schema:
 {untrusted_text_block('database_schema', schema, max_chars=50_000)}
 
@@ -141,8 +173,15 @@ SQL candidate:
                 last_parse_error = exc
         if review is None:
             raise ValueError(f"reviewer returned invalid JSON twice: {last_parse_error}")
+        plan = QueryPlan.model_validate(state.get("query_plan") or {})
         llm_issues = reconcile_llm_issues(state["question"], sql, review.issues)
-        hard_issues = review_sql_semantics(state["question"], sql)
+        if coverage == "high" and _plan_has_resolved_filter(plan):
+            # The deterministic plan already resolved the semantics; drop a
+            # reviewer ambiguity that re-opens an already-governed condition.
+            llm_issues = [issue for issue in llm_issues if issue.code != "ambiguous_intent"]
+        hard_issues = list(review_sql_semantics(state["question"], sql))
+        if coverage == "high":
+            hard_issues.extend(check_plan_consistency(plan, sql))
         combined: list[ReviewIssue] = []
         seen: set[tuple[str, str]] = set()
         for issue in [*hard_issues, *llm_issues]:
