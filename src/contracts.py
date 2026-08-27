@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -95,3 +95,61 @@ class SQLAttempt(StrictContract):
     timestamp_utc: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
+
+
+class FilterNode(StrictContract):
+    """A single resolved filter condition or a nested AND/OR/NOT group."""
+
+    op: str
+    field: str | None = None
+    value: Any | None = None
+    children: list["FilterNode"] = Field(default_factory=list)
+
+
+class StructuredIntent(StrictContract):
+    """Deterministic business-intent slots extracted from the user question."""
+
+    entity: str | None = None
+    metric: str | None = None
+    aggregation: str | None = None
+    counting_unit: str | None = None
+    time_range: str | None = None
+    dimensions: list[str] = Field(default_factory=list)
+    filters: FilterNode | None = None
+    group_by: list[str] = Field(default_factory=list)
+    sort_field: str | None = None
+    sort_order: str | None = None
+    limit: int | None = None
+    comparison: str | None = None
+    analysis_type: str = "summary"
+    business_concepts: list[str] = Field(default_factory=list)
+    ambiguities: list[str] = Field(default_factory=list)
+    confidence: str = "high"
+    semantic_coverage: str = "low"
+
+
+class QueryPlan(StrictContract):
+    """Governed intermediate representation between intent and SQL."""
+
+    selected_tables: list[str] = Field(default_factory=list)
+    selected_columns: dict[str, list[str]] = Field(default_factory=dict)
+    metric_expression: str | None = None
+    filter_tree: FilterNode | None = None
+    group_by: list[str] = Field(default_factory=list)
+    order_by: list[str] = Field(default_factory=list)
+    limit: int | None = None
+    time_scope: str | None = None
+    time_field: str = "purchase_timestamp"
+    time_grain: str | None = None
+    time_boundaries: dict | None = None
+    governed_rules_applied: list[str] = Field(default_factory=list)
+    analysis_type: str = "summary"
+
+
+class AnalysisResult(StrictContract):
+    """Deterministic post-query analysis facts, not LLM prose."""
+
+    analysis_type: str = "summary"
+    summary: str = ""
+    facts: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)

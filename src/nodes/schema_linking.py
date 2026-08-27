@@ -8,11 +8,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
 from src.config import get_llm
-from src.contracts import SchemaSelection
+from src.contracts import SchemaSelection, StructuredIntent
 from src.guardrails import untrusted_text_block
 from src.observability import invoke_llm_observed
 from src.policy import require_tool
-from src.semantic_rules import get_metric_guidance, preferred_tables_for_question
+from src.query_plan import build_query_plan, resolve_tables
+from src.semantic_rules import get_metric_guidance
 from src.state import BIAgentState, record_error
 from src.tools.db_tools import (
     get_catalog_metrics,
@@ -71,12 +72,13 @@ def schema_linking_node(state: BIAgentState) -> dict:
         schema_context_metrics.update(get_catalog_metrics())
         require_tool("schema_linking", "list_tables")
         known_tables = set(list_tables())
-        preferred_tables = preferred_tables_for_question(state["question"])
-        governed_tables = [table for table in preferred_tables if table in known_tables]
+        intent = StructuredIntent.model_validate(state.get("structured_intent") or {})
+        resolved_tables = resolve_tables(intent, state["question"])
+        governed_tables = [table for table in resolved_tables if table in known_tables]
         if (
             not is_relink
-            and preferred_tables
-            and len(governed_tables) == len(preferred_tables)
+            and resolved_tables
+            and len(governed_tables) == len(resolved_tables)
         ):
             selected_columns: dict[str, list[str]] = {}
             for table in governed_tables:
@@ -94,6 +96,9 @@ def schema_linking_node(state: BIAgentState) -> dict:
             return {
                 "relevant_tables": governed_tables,
                 "relevant_columns": selected_columns,
+                "query_plan": build_query_plan(
+                    intent, state["question"], governed_tables, selected_columns
+                ).model_dump(mode="json"),
                 "schema_status": "succeeded",
                 "schema_reasoning": (
                     f"Governed metric view selected: {', '.join(governed_tables)}"
@@ -206,6 +211,9 @@ def schema_linking_node(state: BIAgentState) -> dict:
         return {
             "relevant_tables": selected_tables,
             "relevant_columns": selected_columns,
+            "query_plan": build_query_plan(
+                intent, state["question"], selected_tables, selected_columns
+            ).model_dump(mode="json"),
             "schema_status": "succeeded",
             "schema_reasoning": selection.reasoning,
             "schema_refresh_count": refresh_count,

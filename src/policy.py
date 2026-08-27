@@ -106,6 +106,9 @@ def validate_agent_update(agent: str, update: Mapping[str, Any]) -> None:
         answer = update["final_answer"]
         if not isinstance(answer, str) or len(answer) > 20_000:
             raise PolicyViolation(f"{agent} returned an invalid final_answer")
+    for key in ("structured_intent", "query_plan", "analysis_result"):
+        if key in update and not isinstance(update[key], dict):
+            raise PolicyViolation(f"{agent} returned a non-dict {key}")
 
 
 def transition_decision(from_agent: str, to_agent: str) -> PolicyDecision:

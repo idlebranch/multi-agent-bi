@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from src.config import DEFAULT_MAX_ITERATIONS, get_data_as_of_date
 from src.guardrails import normalize_untrusted_text, redact_secrets, screen_user_question
+from src.intent import build_structured_intent, clarification_decision
 
 
 StageStatus = Literal["not_started", "succeeded", "failed", "no_match"]
@@ -40,6 +41,11 @@ class BIAgentState(TypedDict, total=False):
     request_status: RequestStatus
     request_message: str
     clarification_options: list[dict]
+
+    # Structured intent / governed query plan / result analysis
+    structured_intent: dict
+    query_plan: dict
+    analysis_result: dict
 
     # Catalog / schema selection
     relevant_tables: list[str]
@@ -107,6 +113,17 @@ def create_initial_state(
     guard_started = perf_counter()
     screening = screen_user_question(question)
     guard_duration_ms = round((perf_counter() - guard_started) * 1000, 3)
+    intent = build_structured_intent(screening["question"])
+    intent_dict = intent.model_dump(mode="json")
+    request_status = screening["request_status"]
+    request_message = screening["request_message"]
+    clarification_options = screening["clarification_options"]
+    if screening["status"] == "passed" and request_status == "ready":
+        clarification = clarification_decision(intent)
+        if clarification["needs_clarification"]:
+            request_status = "clarification_required"
+            request_message = clarification["message"]
+            clarification_options = clarification["options"]
     return {
         "request_id": uuid4().hex,
         "run_id": uuid4().hex,
@@ -114,9 +131,12 @@ def create_initial_state(
         "as_of_date": as_of_date or get_data_as_of_date(),
         "input_guard_status": screening["status"],
         "input_risk_flags": screening["risk_flags"],
-        "request_status": screening["request_status"],
-        "request_message": screening["request_message"],
-        "clarification_options": screening["clarification_options"],
+        "request_status": request_status,
+        "request_message": request_message,
+        "clarification_options": clarification_options,
+        "structured_intent": intent_dict,
+        "query_plan": {},
+        "analysis_result": {},
         "relevant_tables": [],
         "relevant_columns": {},
         "schema_context_metrics": {

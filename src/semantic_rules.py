@@ -7,7 +7,7 @@ import re
 from datetime import date
 from collections.abc import Iterable
 
-from src.contracts import ReviewIssue
+from src.contracts import FilterNode, QueryPlan, ReviewIssue
 
 
 MetricName = str
@@ -113,6 +113,7 @@ def identify_metric(question: str) -> MetricName | None:
         return "delivered_customer_gmv_percentile"
     if (
         _contains_any(value, ("订单状态", "order status", "orders by status"))
+        and not re.search(r"(?:不是|不为|不等于|非)\s*(delivered|canceled|unavailable)", value)
         and _contains_any(value, ("多少", "数量", "count", "how many"))
     ):
         return "orders_by_status"
@@ -122,7 +123,7 @@ def identify_metric(question: str) -> MetricName | None:
     ):
         return "monthly_delivered_gmv"
     if (
-        _contains_any(value, ("每月", "按月", "monthly", "by month"))
+        _contains_any(value, ("每月", "按月", "月度", "monthly", "by month"))
         and _contains_any(value, ("gmv", "销售额", "成交额", "revenue"))
     ):
         return "monthly_delivered_gmv"
@@ -257,6 +258,7 @@ def question_requests_time_scope(question: str) -> bool:
     value = question.casefold()
     return bool(
         re.search(r"(?:19|20)\d{2}(?:年|[-/])?", value)
+        or re.search(r"(?<![\d])\d{2}\s*年", value)
         or _contains_any(
             value,
             (
@@ -854,3 +856,53 @@ def reconcile_llm_issues(
                 continue
         reconciled.append(issue)
     return reconciled
+
+
+def _filter_leaves(node: FilterNode) -> Iterable[FilterNode]:
+    if node.children:
+        for child in node.children:
+            yield from _filter_leaves(child)
+    else:
+        yield node
+
+
+def check_plan_consistency(plan: QueryPlan, sql: str) -> list[ReviewIssue]:
+    """Deterministic check that the SQL preserves the governed query plan.
+
+    Verifies that filter values (statuses, states, thresholds) and null-check
+    fields from the query plan still appear in the generated SQL, so the
+    reviewer can deterministically reject SQL that dropped a requested filter.
+    """
+    if plan is None or plan.filter_tree is None:
+        return []
+    value = sql.casefold()
+    issues: list[ReviewIssue] = []
+    for leaf in _filter_leaves(plan.filter_tree):
+        # A "delivered" scope is frequently enforced by a governed semantic view
+        # rather than an explicit WHERE clause; metric rules cover that case.
+        if leaf.field == "status" and leaf.value == "delivered":
+            continue
+        if leaf.op in {"is_null", "is_not_null"} and leaf.field:
+            if leaf.field.casefold() not in value:
+                issues.append(
+                    _issue(
+                        "missing_status_filter",
+                        f"query plan requires {leaf.field} IS NULL but SQL is missing it",
+                    )
+                )
+            continue
+        if leaf.value is None:
+            continue
+        candidates = leaf.value if isinstance(leaf.value, list) else [leaf.value]
+        for item in candidates:
+            if item is None:
+                continue
+            token = str(item).casefold().strip()
+            if token and token not in value:
+                issues.append(
+                    _issue(
+                        "missing_status_filter",
+                        f"query plan filter value {item!r} is missing from the SQL",
+                    )
+                )
+    return issues
