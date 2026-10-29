@@ -43,3 +43,14 @@ dist/
 reports/live_batch_*.json
 reports/performance_*.json
 reports/demo_acceptance_*.json
+
+# 只保留最终发布的评测证据，过程中的中间结果不入库
+benchmarks/results/*
+!benchmarks/results/benchmark_baseline_20260827T154133Z.json
+!benchmarks/results/benchmark_baseline_20260827T154133Z.md
+!benchmarks/results/final_benchmark_20260825.json
+!benchmarks/results/final_benchmark_20260825.md
+!benchmarks/results/final_reliability_20260824.json
+!benchmarks/results/final_reliability_20260824.md
+!benchmarks/results/holdout_results_20260824.json
+!benchmarks/results/holdout_results_20260824.md

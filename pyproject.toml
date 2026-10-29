@@ -1,7 +1,7 @@
 [project]
 name = "multi-agent-bi"
 version = "0.1.0"
-description = "Production-oriented multi-agent BI workflow for governed PostgreSQL text-to-SQL"
+description = "多智能体 BI 工作流：把中文业务问题转换成可审计的 PostgreSQL 查询"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -31,7 +31,3 @@ markers = [
     "docker_contract: static Docker and Compose deployment contracts",
     "live_llm: paid provider tests; never selected by ordinary CI",
 ]
-
-[tool.ruff]
-# Educational notebooks are outside the Production code quality gate.
-exclude = ["notebooks"]

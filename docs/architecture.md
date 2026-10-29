@@ -1,69 +1,69 @@
-# Production Architecture
+# 架构说明
 
-## Request path
+## 请求路径
 
 ```mermaid
 flowchart LR
-    U[User / Browser / API client] --> F[FastAPI]
-    F --> I[Input Guard]
-    I --> P[Policy-coded deterministic router]
+    U[用户 / 浏览器 / API 调用方] --> F[FastAPI]
+    F --> I[输入防护]
+    I --> P[确定性策略路由]
 
     subgraph W[LangGraph]
-        P --> S[Schema Linking]
-        S --> G[SQL Writer]
-        G --> R[Independent SQL Reviewer]
-        R -->|approved| V[Read-only Validator + EXPLAIN]
-        R -->|repair, max 2| G
-        V --> X[Executor]
-        X --> A[Answer + numerical fidelity guard]
+        P --> S[schema_linking]
+        S --> G[sql_generation]
+        G --> R[sql_review 独立审核]
+        R -->|通过| V[只读校验 + EXPLAIN]
+        R -->|退回重写，最多 2 次| G
+        V --> X[sql_execution]
+        X --> A[format_answer + 数值一致性检查]
     end
 
-    X --> L[BoundedSemaphore: limit 4 by default]
-    L --> T[Timed capacity wait]
-    T --> D[PostgreSQL db_tools]
-    D --> RO[agent_readonly + READ ONLY transaction]
+    X --> L[信号量：默认上限 4]
+    L --> T[限时等待]
+    T --> D[db_tools]
+    D --> RO[agent_readonly + READ ONLY 事务]
     RO --> PG[(PostgreSQL 17)]
 
-    O[Safe structured trace] -. request/run correlation .-> W
+    O[结构化 trace] -. request/run 关联 .-> W
 ```
 
-The Production router is deterministic. It makes zero planner/router LLM calls. Schema Linking can use governed table selection without an LLM or make one catalog call; SQL Writer, Reviewer, and Answer are the observable LLM stages. Repair calls are additional SQL Writer calls within the same fixed budget.
+正式链路里的路由器是确定性的，不产生任何 planner/router 的 LLM 调用。schema_linking 可以在不调用模型的情况下完成表选择，也可以用一次目录查询；真正会调用模型的是 sql_generation、sql_review 和 format_answer 三个阶段。退回重写占用的是同一个固定预算内的额外 sql_generation 调用。
 
-## Capacity semantics
+## 并发语义
 
-The database boundary uses an in-process `threading.BoundedSemaphore` plus a timed acquire. This is bounded concurrency with bounded waiting, not a message queue. There is no queue broker, persistent queue, worker consumer, or configured queue length. A caller that cannot acquire capacity within the timeout receives the compatibility error code `queue_timeout`, with a message that identifies a database capacity-wait timeout.
+数据库这一层用的是进程内 `threading.BoundedSemaphore` 加限时获取。这只是有上限的并发和有上限的等待，不是消息队列：没有 broker、没有持久化队列、没有 worker 消费者，也没有可配置的队列长度。等不到容量的调用会收到兼容性错误码 `queue_timeout`，错误信息里会直接说明是数据库容量等待超时。
 
-## Deployment and verification
+## 部署与验证
 
 ```mermaid
 flowchart TB
     subgraph DC[Docker Compose]
-        APP[FastAPI app\nnon-root 10001]
-        LOADER[One-shot Olist loader]
-        DB[(PostgreSQL 17\npersistent volume)]
+        APP[FastAPI 应用<br/>非 root，UID 10001]
+        LOADER[一次性 Olist 数据导入]
+        DB[(PostgreSQL 17<br/>持久化卷)]
         LOADER --> DB
         APP -->|agent_readonly| DB
     end
 
     GH[GitHub Actions] --> Q[Ruff + pytest]
-    Q --> FIX[Deterministic PostgreSQL fixture]
-    Q --> IMG[Docker image + non-root contract]
+    Q --> FIX[确定性 PostgreSQL 测试数据集]
+    Q --> IMG[Docker 镜像 + 非 root 契约]
 
-    BR[Final live benchmark\n90 business + 25 safety] --> APP
-    REL[Deterministic reliability scenarios] --> DB
+    BR[完整评测：90 业务 + 25 安全] --> APP
+    REL[确定性可靠性场景] --> DB
 ```
 
-Production data loading requires the external Olist ZIP and owner credentials. Runtime queries use a separate readonly role. CI never needs DeepSeek credentials or the full Olist ZIP.
+导入真实数据需要外部 Olist 压缩包和 owner 凭据。运行时查询走的是另一个只读角色。CI 全程不需要 DeepSeek 凭据，也不需要完整数据集。
 
-## Observability boundary
+## 可观测性边界
 
-One JSON summary record is emitted per workflow run with:
+每个工作流运行输出一条 JSON 记录，包含：
 
-- `request_id`, `run_id`, UTC timestamp and total latency;
-- node names, attempt numbers, statuses and duration;
-- routing/review decisions, repair count and numerical-fidelity outcome;
-- validation/execution status, row count, truncation, capacity wait and error code;
-- available/selected schema counts and actual context character sizes;
-- actual workflow LLM stage calls and provider-reported token usage when present.
+- `request_id`、`run_id`、UTC 时间和总延迟
+- 节点名、尝试次数、状态和耗时
+- 路由与审核决策、退回次数、数值一致性结果
+- 校验与执行状态、返回行数、是否截断、容量等待时长、错误码
+- 可用与选中的表数量、实际的上下文长度
+- 实际的 LLM 阶段调用次数，以及 provider 上报的 token 用量（拿不到就标记为不可用）
 
-It intentionally excludes full user prompts, SQL text, database results, credentials and provider exception messages. Questions and SQL are represented by SHA-256 plus length.
+记录里刻意不包含完整的用户问题、SQL 原文、数据库结果、凭据和 provider 异常信息。问题和 SQL 只存 SHA-256 和长度。
