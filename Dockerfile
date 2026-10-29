@@ -20,7 +20,7 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-install-project
 
-COPY --chown=app:app api.py main.py ./
+COPY --chown=app:app api.py ./
 COPY --chown=app:app src ./src
 COPY --chown=app:app static ./static
 COPY --chown=app:app policies ./policies
