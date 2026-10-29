@@ -42,7 +42,7 @@ class DemoExperienceTests(unittest.TestCase):
         self.assertIn("position: sticky", css)
 
     def test_windows_launcher_uses_docker_compose_lifecycle(self) -> None:
-        launcher = (ROOT / "launcher.pyw").read_text(encoding="utf-8")
+        launcher = (ROOT / "deploy" / "windows" / "launcher.pyw").read_text(encoding="utf-8")
 
         self.assertIn("CREATE_NO_WINDOW", launcher)
         self.assertIn("SetProcessDpiAwarenessContext", launcher)
@@ -86,8 +86,10 @@ class DemoExperienceTests(unittest.TestCase):
         self.assertIsNone(re.search(r"(?:backdrop-)?filter\s*:", css, re.IGNORECASE))
 
     def test_packaging_and_shortcut_scripts_are_present(self) -> None:
-        build_script = (ROOT / "build_launcher.cmd").read_text(encoding="utf-8")
-        shortcut_script = (ROOT / "create_desktop_shortcut.ps1").read_text(
+        build_script = (ROOT / "deploy" / "windows" / "build_launcher.cmd").read_text(
+            encoding="utf-8"
+        )
+        shortcut_script = (ROOT / "deploy" / "windows" / "create_desktop_shortcut.ps1").read_text(
             encoding="utf-8-sig"
         )
 

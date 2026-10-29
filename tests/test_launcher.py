@@ -14,7 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture()
 def launcher() -> dict[str, Any]:
-    return runpy.run_path(str(PROJECT_ROOT / "launcher.pyw"))
+    return runpy.run_path(str(PROJECT_ROOT / "deploy" / "windows" / "launcher.pyw"))
 
 
 def test_healthy_fast_path_skips_docker_and_opens_app(

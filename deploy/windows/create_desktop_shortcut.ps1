@@ -2,8 +2,9 @@
 param()
 
 $ErrorActionPreference = "Stop"
-$ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Launcher = Join-Path $ProjectRoot "dist\MultiAgentBI-Launcher.exe"
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ProjectRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
+$Launcher = Join-Path $ScriptDir "dist\MultiAgentBI-Launcher.exe"
 
 if (-not (Test-Path -LiteralPath $Launcher -PathType Leaf)) {
     throw "Launcher EXE not found. Run build_launcher.cmd first: $Launcher"

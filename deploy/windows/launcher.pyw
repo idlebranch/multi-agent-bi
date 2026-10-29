@@ -120,15 +120,17 @@ def find_project_root() -> Path:
     if getattr(sys, "frozen", False):
         executable_dir = Path(sys.executable).resolve().parent
         candidates.extend((executable_dir, executable_dir.parent))
-    candidates.append(Path(__file__).resolve().parent)
+    script_dir = Path(__file__).resolve().parent
+    candidates.append(script_dir)
+    candidates.extend(script_dir.parents[:3])
     for candidate in candidates:
         if (candidate / "compose.yaml").is_file() and (
             candidate / "pyproject.toml"
         ).is_file():
             return candidate
     raise LauncherError(
-        "Startup failed: repository root not found. Keep the launcher in the "
-        "repository dist directory."
+        "Startup failed: repository root not found. Keep the launcher inside "
+        "the repository tree."
     )
 
 

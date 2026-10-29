@@ -33,4 +33,4 @@ dist
 *.log
 *.tmp
 *.bak
-graph_diagram.png
+deploy

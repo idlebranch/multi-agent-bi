@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    launcher: dict[str, Any] = runpy.run_path(str(PROJECT_ROOT / "launcher.pyw"))
+    launcher: dict[str, Any] = runpy.run_path(str(PROJECT_ROOT / "deploy" / "windows" / "launcher.pyw"))
     launcher["enable_windows_dpi_awareness"]()
     root = launcher["tk"].Tk()
     root.tk.call("tk", "scaling", args.dpi / 72.0)
